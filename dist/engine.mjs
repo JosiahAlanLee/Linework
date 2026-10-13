@@ -1,40 +1,451 @@
 /** Linework v0.1 — geometry is in millimetres. No DOM or runtime dependencies. */
-export const DEFAULTS = {mode:'ribbons',seed:'AL-184',width:210,height:297,margin:15,spacing:1.15,pen:0.3,distortion:60,density:65,palette:'earth',colors:['#383c37','#8c4f3c','#798276'],background:'#f4efe4',crosshatch:true,invert:false,frame:false,optimize:true,speed:40,travelSpeed:100,liftDelay:0.35};
-export const PALETTES={carbon:['#292c2b'],earth:['#383c37','#8c4f3c','#798276'],signal:['#202b30','#c04735','#b49a4d'],dusk:['#30364b','#96526f','#71858c']};
-export function random(seed){let h=2166136261;for(const c of String(seed)){h=Math.imul(h^c.charCodeAt(0),16777619)}return ()=>{h+=0x6d2b79f5;let t=Math.imul(h^h>>>15,1|h);t^=t+Math.imul(t^t>>>7,61|t);return ((t^t>>>14)>>>0)/4294967296}}
-export function normalize(input={}) {const o={...DEFAULTS};for(const key of Object.keys(DEFAULTS))if(input[key]!==undefined)o[key]=input[key];if(input.paper)o.paper=input.paper;if(input.orientation)o.orientation=input.orientation;const n=(key,lo,hi)=>{const value=Number(o[key]);o[key]=Math.max(lo,Math.min(hi,Number.isFinite(value)?value:DEFAULTS[key]))};n('width',50,900);n('height',50,900);n('margin',1,Math.min(o.width,o.height)/2-5);n('spacing',0.35,8);n('pen',0.05,2);n('distortion',1,100);n('density',1,100);n('speed',1,200);n('travelSpeed',1,300);n('liftDelay',0.05,5);if(!['ribbons','signal','wire','image'].includes(o.mode))o.mode='ribbons';o.seed=String(o.seed).slice(0,80);o.colors=o.palette==='custom'&&Array.isArray(o.colors)?o.colors:PALETTES[o.palette]||PALETTES.earth;o.colors=o.colors.filter(c=>typeof c==='string'&&/^#[0-9a-f]{6}$/i.test(c)).slice(0,4);if(!o.colors.length)o.colors=PALETTES.carbon;for(const key of ['crosshatch','invert','frame','optimize'])o[key]=!!o[key];if(!/^#[0-9a-f]{6}$/i.test(o.background))o.background=DEFAULTS.background;return o}
-const dist=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1]);
-// Liang–Barsky clipping preserves the centreline, rather than clamping border points.
-export function clipSegment(a,b,box){let t0=0,t1=1;const dx=b[0]-a[0],dy=b[1]-a[1];const p=[-dx,dx,-dy,dy],q=[a[0]-box[0],box[2]-a[0],a[1]-box[1],box[3]-a[1]];for(let i=0;i<4;i++){if(Math.abs(p[i])<1e-12){if(q[i]<0)return null}else{const r=q[i]/p[i];if(p[i]<0)t0=Math.max(t0,r);else t1=Math.min(t1,r);if(t0>t1)return null}}return [[a[0]+t0*dx,a[1]+t0*dy],[a[0]+t1*dx,a[1]+t1*dy]]}
-export function generate(input={},raster=null){const o=normalize(input),rng=random(o.seed),layers=o.colors.map((color,i)=>({id:'pen-'+(i+1),name:'Pen '+(i+1),color,paths:[]}));const m=o.margin+o.pen/2,box=[m,m,o.width-m,o.height-m],w=box[2]-m,h=box[3]-m,s=o.spacing,d=o.distortion/100,den=o.density/100;let pathCount=0;
- const add=(pts,ink=0)=>{if(pts.length<2)return;let run=[];const flush=()=>{if(run.length>1&&pathCount<45000){layers[ink%layers.length].paths.push(run);pathCount++}run=[]};for(let i=1;i<pts.length;i++){const seg=clipSegment(pts[i-1],pts[i],box);if(!seg){flush();continue}if(!run.length)run=[seg[0],seg[1]];else if(dist(run.at(-1),seg[0])<0.001)run.push(seg[1]);else{flush();run=[seg[0],seg[1]]}if(dist(seg[1],pts[i])>0.001)flush()}flush()};
- if(o.mode==='ribbons'){
-  const phases=Array.from({length:5},()=>rng()*Math.PI*2),amp=Math.min(w,h)*0.14*d;
-  const field=(x,y)=>{const u=x/w,v=y/h;return amp*(Math.sin(u*7+phases[0]+v*1.4)+0.45*Math.sin(u*13-v*4+phases[1])+0.23*Math.sin(u*25+v*9+phases[2]))};
-  let row=0;for(let y=-amp*2;y<h+amp*2;y+=s,row++){
-   // Periodic open channels leave breathing room between densely drawn ribbons.
-   const band=Math.floor((y+amp*2)/(s*14));if(row%14>10+Math.floor(den*3))continue;
-   const pts=[];for(let x=0;x<=w+0.8;x+=0.8)pts.push([m+Math.min(x,w),m+y+field(Math.min(x,w),y)]);add(pts,(band+Math.floor(phases[3]))%layers.length);
+export const DEFAULTS = {
+  mode: "ribbons",
+  seed: "AL-184",
+  width: 210,
+  height: 297,
+  margin: 15,
+  spacing: 1.15,
+  pen: 0.3,
+  distortion: 60,
+  density: 65,
+  palette: "earth",
+  colors: ["#383c37", "#8c4f3c", "#798276"],
+  background: "#f4efe4",
+  crosshatch: true,
+  invert: false,
+  frame: false,
+  optimize: true,
+  speed: 40,
+  travelSpeed: 100,
+  liftDelay: 0.35,
+};
+export const PALETTES = {
+  carbon: ["#292c2b"],
+  earth: ["#383c37", "#8c4f3c", "#798276"],
+  signal: ["#202b30", "#c04735", "#b49a4d"],
+  dusk: ["#30364b", "#96526f", "#71858c"],
+};
+export function random(seed) {
+  let h = 2166136261;
+  for (const c of String(seed)) {
+    h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   }
-  if(o.crosshatch){for(let x=0;x<w;x+=s*2.8){const pts=[];for(let y=0;y<=h;y+=1.2){const xx=x+field(y*w/h,x)*0.3;if(Math.sin(y/h*16+xx/w*8+phases[4])>0.72+(1-den)*0.2)pts.push([m+xx,m+y]);else if(pts.length){add(pts,0);pts.length=0}}add(pts,0)}}
- }else if(o.mode==='signal'){
-  let y=0,row=0;while(y<h){const rh=(9+rng()*24)*(0.8+d*0.8),phase=rng()*4;let x=0;while(x<w){const bw=8+rng()*30,ink=Math.floor(rng()*layers.length);for(let xx=x;xx<Math.min(w,x+bw);xx+=s){if(rng()>den*0.7+0.25)continue;const top=y+rng()*rh*0.3*d,bottom=Math.min(h,y+rh*(0.6+rng()*0.4)),bend=Math.sin(xx/w*12+phase)*d*1.2;add([[m+xx,m+top],[m+xx+bend,m+bottom]],ink);if(rng()<den*0.2)add([[m+xx+s*0.35,m+top],[m+xx+s*0.35+bend,m+bottom*1]],ink)}x+=bw}if(o.crosshatch&&row%3===0)add([[m,m+y+rh*0.65],[m+w,m+y+rh*0.65]],row%layers.length);y+=rh+s*1.7;row++}
- }else if(o.mode==='wire'){
-  const n=Math.max(3,Math.floor(3+den*5)),sh=h/n;let prev=null;
-  for(let k=0;k<n;k++){const y=k*sh,flip=k%2?-1:1,peakX=w*(0.4+rng()*0.28),peakY=y+sh*(0.2+rng()*0.25),count=Math.max(6,Math.floor(sh/s));for(let j=0;j<count;j++){const t=j/(count-1),yy=y+t*sh;const xL=w*(0.04+rng()*0.025*d),xR=w*(0.9+rng()*0.06*d),a=[m+xL,m+yy],b=[m+peakX+Math.sin(t*6+k)*d*w*0.06,m+peakY+t*sh*(0.45+d*0.25)],c=[m+xR,m+y+sh*(flip>0?t:1-t)];add([a,b,c],k%layers.length);if(o.crosshatch&&j%3===0&&prev)add([a,prev],(k+1)%layers.length);prev=c}if(o.crosshatch)add([[m+w*0.08,m+y],[m+w*0.08,m+y+sh]],0)}
- }else if(o.mode==='image'){
-  if(!raster||!raster.data||raster.data.length!==raster.width*raster.height*4)throw new Error('Choose an image before generating image hatching.');
-  const ratio=Math.min(w/raster.width,h/raster.height),iw=raster.width*ratio,ih=raster.height*ratio,ix=m+(w-iw)/2,iy=m+(h-ih)/2;
-  const rgb=o.colors.map(c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16))),angles=o.crosshatch?[-Math.PI/4,Math.PI/4,0]:[-Math.PI/4],diag=Math.hypot(iw,ih),step=Math.max(0.3,s/2),cx=ix+iw/2,cy=iy+ih/2;
-  const sample=(x,y)=>{const u=(x-ix)/ratio,v=(y-iy)/ratio;if(u<0||v<0||u>=raster.width||v>=raster.height)return null;const pos=(Math.floor(v)*raster.width+Math.floor(u))*4,a=raster.data[pos+3]/255;const c=[0,1,2].map(j=>raster.data[pos+j]*a+255*(1-a));let tone=1-(c[0]*0.2126+c[1]*0.7152+c[2]*0.0722)/255;if(o.invert)tone=1-tone;let ink=0,best=Infinity;const light=(c[0]+c[1]+c[2])/3;for(let k=0;k<rgb.length;k++){const pl=(rgb[k][0]+rgb[k][1]+rgb[k][2])/3,e=c.reduce((sum,val,j)=>sum+((val-light)-(rgb[k][j]-pl))**2,0);if(e<best){best=e;ink=k}}return {tone,ink}};
-  for(let pass=0;pass<angles.length;pass++){const angle=angles[pass],ux=Math.cos(angle),uy=Math.sin(angle),nx=-uy,ny=ux,threshold=[0.10,0.43,0.70][pass]+(1-den)*0.18;for(let offset=-diag/2;offset<=diag/2;offset+=s){let pts=[],ink=0;const flush=()=>{add(pts,ink);pts=[]};for(let along=-diag/2;along<=diag/2;along+=step){const x=cx+nx*offset+ux*along,y=cy+ny*offset+uy*along,smp=sample(x,y);if(smp&&smp.tone>threshold){if(pts.length&&smp.ink!==ink){flush()}ink=smp.ink;pts.push([x,y])}else flush()}flush()}}
- }
- if(o.frame)add([[m,m],[o.width-m,m],[o.width-m,o.height-m],[m,o.height-m],[m,m]],0);
- return {options:o,layers,bounds:box,limited:pathCount>=45000};
+  return () => {
+    h += 0x6d2b79f5;
+    let t = Math.imul(h ^ (h >>> 15), 1 | h);
+    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+export function normalize(input = {}) {
+  const o = { ...DEFAULTS };
+  for (const key of Object.keys(DEFAULTS)) if (input[key] !== undefined) o[key] = input[key];
+  if (input.paper) o.paper = input.paper;
+  if (input.orientation) o.orientation = input.orientation;
+  const n = (key, lo, hi) => {
+    const value = Number(o[key]);
+    o[key] = Math.max(lo, Math.min(hi, Number.isFinite(value) ? value : DEFAULTS[key]));
+  };
+  n("width", 50, 900);
+  n("height", 50, 900);
+  n("margin", 1, Math.min(o.width, o.height) / 2 - 5);
+  n("spacing", 0.35, 8);
+  n("pen", 0.05, 2);
+  n("distortion", 1, 100);
+  n("density", 1, 100);
+  n("speed", 1, 200);
+  n("travelSpeed", 1, 300);
+  n("liftDelay", 0.05, 5);
+  if (!["ribbons", "signal", "wire", "image"].includes(o.mode)) o.mode = "ribbons";
+  o.seed = String(o.seed).slice(0, 80);
+  o.colors =
+    o.palette === "custom" && Array.isArray(o.colors) ? o.colors : PALETTES[o.palette] || PALETTES.earth;
+  o.colors = o.colors.filter((c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)).slice(0, 4);
+  if (!o.colors.length) o.colors = PALETTES.carbon;
+  for (const key of ["crosshatch", "invert", "frame", "optimize"]) o[key] = !!o[key];
+  if (!/^#[0-9a-f]{6}$/i.test(o.background)) o.background = DEFAULTS.background;
+  return o;
+}
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+// Liang–Barsky clipping preserves the centreline, rather than clamping border points.
+export function clipSegment(a, b, box) {
+  let t0 = 0,
+    t1 = 1;
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1];
+  const p = [-dx, dx, -dy, dy],
+    q = [a[0] - box[0], box[2] - a[0], a[1] - box[1], box[3] - a[1]];
+  for (let i = 0; i < 4; i++) {
+    if (Math.abs(p[i]) < 1e-12) {
+      if (q[i] < 0) return null;
+    } else {
+      const r = q[i] / p[i];
+      if (p[i] < 0) t0 = Math.max(t0, r);
+      else t1 = Math.min(t1, r);
+      if (t0 > t1) return null;
+    }
+  }
+  return [
+    [a[0] + t0 * dx, a[1] + t0 * dy],
+    [a[0] + t1 * dx, a[1] + t1 * dy],
+  ];
+}
+export function generate(input = {}, raster = null) {
+  const o = normalize(input),
+    rng = random(o.seed),
+    layers = o.colors.map((color, i) => ({ id: "pen-" + (i + 1), name: "Pen " + (i + 1), color, paths: [] }));
+  const m = o.margin + o.pen / 2,
+    box = [m, m, o.width - m, o.height - m],
+    w = box[2] - m,
+    h = box[3] - m,
+    s = o.spacing,
+    d = o.distortion / 100,
+    den = o.density / 100;
+  let pathCount = 0;
+  const add = (pts, ink = 0) => {
+    if (pts.length < 2) return;
+    let run = [];
+    const flush = () => {
+      if (run.length > 1 && pathCount < 45000) {
+        layers[ink % layers.length].paths.push(run);
+        pathCount++;
+      }
+      run = [];
+    };
+    for (let i = 1; i < pts.length; i++) {
+      const seg = clipSegment(pts[i - 1], pts[i], box);
+      if (!seg) {
+        flush();
+        continue;
+      }
+      if (!run.length) run = [seg[0], seg[1]];
+      else if (dist(run.at(-1), seg[0]) < 0.001) run.push(seg[1]);
+      else {
+        flush();
+        run = [seg[0], seg[1]];
+      }
+      if (dist(seg[1], pts[i]) > 0.001) flush();
+    }
+    flush();
+  };
+  if (o.mode === "ribbons") {
+    const phases = Array.from({ length: 5 }, () => rng() * Math.PI * 2),
+      amp = Math.min(w, h) * 0.14 * d;
+    const field = (x, y) => {
+      const u = x / w,
+        v = y / h;
+      return (
+        amp *
+        (Math.sin(u * 7 + phases[0] + v * 1.4) +
+          0.45 * Math.sin(u * 13 - v * 4 + phases[1]) +
+          0.23 * Math.sin(u * 25 + v * 9 + phases[2]))
+      );
+    };
+    let row = 0;
+    for (let y = -amp * 2; y < h + amp * 2; y += s, row++) {
+      // Periodic open channels leave breathing room between densely drawn ribbons.
+      const band = Math.floor((y + amp * 2) / (s * 14));
+      if (row % 14 > 10 + Math.floor(den * 3)) continue;
+      const pts = [];
+      for (let x = 0; x <= w + 0.8; x += 0.8)
+        pts.push([m + Math.min(x, w), m + y + field(Math.min(x, w), y)]);
+      add(pts, (band + Math.floor(phases[3])) % layers.length);
+    }
+    if (o.crosshatch) {
+      for (let x = 0; x < w; x += s * 2.8) {
+        const pts = [];
+        for (let y = 0; y <= h; y += 1.2) {
+          const xx = x + field((y * w) / h, x) * 0.3;
+          if (Math.sin((y / h) * 16 + (xx / w) * 8 + phases[4]) > 0.72 + (1 - den) * 0.2)
+            pts.push([m + xx, m + y]);
+          else if (pts.length) {
+            add(pts, 0);
+            pts.length = 0;
+          }
+        }
+        add(pts, 0);
+      }
+    }
+  } else if (o.mode === "signal") {
+    let y = 0,
+      row = 0;
+    while (y < h) {
+      const rh = (9 + rng() * 24) * (0.8 + d * 0.8),
+        phase = rng() * 4;
+      let x = 0;
+      while (x < w) {
+        const bw = 8 + rng() * 30,
+          ink = Math.floor(rng() * layers.length);
+        for (let xx = x; xx < Math.min(w, x + bw); xx += s) {
+          if (rng() > den * 0.7 + 0.25) continue;
+          const top = y + rng() * rh * 0.3 * d,
+            bottom = Math.min(h, y + rh * (0.6 + rng() * 0.4)),
+            bend = Math.sin((xx / w) * 12 + phase) * d * 1.2;
+          add(
+            [
+              [m + xx, m + top],
+              [m + xx + bend, m + bottom],
+            ],
+            ink,
+          );
+          if (rng() < den * 0.2)
+            add(
+              [
+                [m + xx + s * 0.35, m + top],
+                [m + xx + s * 0.35 + bend, m + bottom * 1],
+              ],
+              ink,
+            );
+        }
+        x += bw;
+      }
+      if (o.crosshatch && row % 3 === 0)
+        add(
+          [
+            [m, m + y + rh * 0.65],
+            [m + w, m + y + rh * 0.65],
+          ],
+          row % layers.length,
+        );
+      y += rh + s * 1.7;
+      row++;
+    }
+  } else if (o.mode === "wire") {
+    const n = Math.max(3, Math.floor(3 + den * 5)),
+      sh = h / n;
+    let prev = null;
+    for (let k = 0; k < n; k++) {
+      const y = k * sh,
+        flip = k % 2 ? -1 : 1,
+        peakX = w * (0.4 + rng() * 0.28),
+        peakY = y + sh * (0.2 + rng() * 0.25),
+        count = Math.max(6, Math.floor(sh / s));
+      for (let j = 0; j < count; j++) {
+        const t = j / (count - 1),
+          yy = y + t * sh;
+        const xL = w * (0.04 + rng() * 0.025 * d),
+          xR = w * (0.9 + rng() * 0.06 * d),
+          a = [m + xL, m + yy],
+          b = [m + peakX + Math.sin(t * 6 + k) * d * w * 0.06, m + peakY + t * sh * (0.45 + d * 0.25)],
+          c = [m + xR, m + y + sh * (flip > 0 ? t : 1 - t)];
+        add([a, b, c], k % layers.length);
+        if (o.crosshatch && j % 3 === 0 && prev) add([a, prev], (k + 1) % layers.length);
+        prev = c;
+      }
+      if (o.crosshatch)
+        add(
+          [
+            [m + w * 0.08, m + y],
+            [m + w * 0.08, m + y + sh],
+          ],
+          0,
+        );
+    }
+  } else if (o.mode === "image") {
+    if (!raster || !raster.data || raster.data.length !== raster.width * raster.height * 4)
+      throw new Error("Choose an image before generating image hatching.");
+    const ratio = Math.min(w / raster.width, h / raster.height),
+      iw = raster.width * ratio,
+      ih = raster.height * ratio,
+      ix = m + (w - iw) / 2,
+      iy = m + (h - ih) / 2;
+    const rgb = o.colors.map((c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16))),
+      angles = o.crosshatch ? [-Math.PI / 4, Math.PI / 4, 0] : [-Math.PI / 4],
+      diag = Math.hypot(iw, ih),
+      step = Math.max(0.3, s / 2),
+      cx = ix + iw / 2,
+      cy = iy + ih / 2;
+    const sample = (x, y) => {
+      const u = (x - ix) / ratio,
+        v = (y - iy) / ratio;
+      if (u < 0 || v < 0 || u >= raster.width || v >= raster.height) return null;
+      const pos = (Math.floor(v) * raster.width + Math.floor(u)) * 4,
+        a = raster.data[pos + 3] / 255;
+      const c = [0, 1, 2].map((j) => raster.data[pos + j] * a + 255 * (1 - a));
+      let tone = 1 - (c[0] * 0.2126 + c[1] * 0.7152 + c[2] * 0.0722) / 255;
+      if (o.invert) tone = 1 - tone;
+      let ink = 0,
+        best = Infinity;
+      const light = (c[0] + c[1] + c[2]) / 3;
+      for (let k = 0; k < rgb.length; k++) {
+        const pl = (rgb[k][0] + rgb[k][1] + rgb[k][2]) / 3,
+          e = c.reduce((sum, val, j) => sum + (val - light - (rgb[k][j] - pl)) ** 2, 0);
+        if (e < best) {
+          best = e;
+          ink = k;
+        }
+      }
+      return { tone, ink };
+    };
+    for (let pass = 0; pass < angles.length; pass++) {
+      const angle = angles[pass],
+        ux = Math.cos(angle),
+        uy = Math.sin(angle),
+        nx = -uy,
+        ny = ux,
+        threshold = [0.1, 0.43, 0.7][pass] + (1 - den) * 0.18;
+      for (let offset = -diag / 2; offset <= diag / 2; offset += s) {
+        let pts = [],
+          ink = 0;
+        const flush = () => {
+          add(pts, ink);
+          pts = [];
+        };
+        for (let along = -diag / 2; along <= diag / 2; along += step) {
+          const x = cx + nx * offset + ux * along,
+            y = cy + ny * offset + uy * along,
+            smp = sample(x, y);
+          if (smp && smp.tone > threshold) {
+            if (pts.length && smp.ink !== ink) {
+              flush();
+            }
+            ink = smp.ink;
+            pts.push([x, y]);
+          } else flush();
+        }
+        flush();
+      }
+    }
+  }
+  if (o.frame)
+    add(
+      [
+        [m, m],
+        [o.width - m, m],
+        [o.width - m, o.height - m],
+        [m, o.height - m],
+        [m, m],
+      ],
+      0,
+    );
+  return { options: o, layers, bounds: box, limited: pathCount >= 45000 };
 }
 /** Local nearest-end routing, indexed by spatial cells, with reversible paths. */
-export function routePaths(paths){if(paths.length<2)return paths.map(p=>p.map(x=>[...x]));const cell=12,buckets=new Map(),used=new Uint8Array(paths.length);let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;paths.forEach((p,i)=>{for(const [rev,v] of [[false,p[0]],[true,p.at(-1)]]){const x=Math.floor(v[0]/cell),y=Math.floor(v[1]/cell),key=x+','+y;minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y);if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push({i,rev,v})}});const result=[];let cursor=[0,0];for(let count=0;count<paths.length;count++){const bx=Math.floor(cursor[0]/cell),by=Math.floor(cursor[1]/cell);let best=null,bd=Infinity;const limit=Math.max(Math.abs(bx-minX),Math.abs(bx-maxX),Math.abs(by-minY),Math.abs(by-maxY));for(let r=0;r<=limit;r++){for(let x=bx-r;x<=bx+r;x++)for(let y=by-r;y<=by+r;y++){if(r>0&&x!==bx-r&&x!==bx+r&&y!==by-r&&y!==by+r)continue;for(const candidate of buckets.get(x+','+y)||[]){if(used[candidate.i])continue;const dd=dist(cursor,candidate.v);if(dd<bd){bd=dd;best=candidate}}}const edge=Math.min(cursor[0]-(bx-r)*cell,(bx+r+1)*cell-cursor[0],cursor[1]-(by-r)*cell,(by+r+1)*cell-cursor[1]);if(best&&bd<=edge)break}if(!best)break;used[best.i]=1;const p=paths[best.i].map(x=>[...x]);if(best.rev)p.reverse();result.push(p);cursor=p.at(-1)}return result}
-export function prepare(plot,optimized=false){return {...plot,layers:plot.layers.map(l=>({...l,paths:optimized?routePaths(l.paths):l.paths}))}}
-export function metrics(plot){let draw=0,travel=0,count=0,points=0;for(const l of plot.layers){let cursor=[0,0];for(const p of l.paths){count++;points+=p.length;travel+=dist(cursor,p[0]);for(let i=1;i<p.length;i++)draw+=dist(p[i-1],p[i]);cursor=p.at(-1)}}const o=plot.options;return {draw,travel,count,points,seconds:draw/o.speed+travel/o.travelSpeed+count*o.liftDelay}}
-const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-export function toSVG(plot,{selected=null,preview=false}={}){const o=plot.options;const parts=[`<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${o.width}mm" height="${o.height}mm" viewBox="0 0 ${o.width} ${o.height}">`,`<title>Linework / ${esc(o.mode)} / ${esc(o.seed)}</title>`,`<metadata>${esc(JSON.stringify({generator:'Linework 0.1',...o}))}</metadata>`];if(preview)parts.push(`<rect width="${o.width}" height="${o.height}" fill="${o.background}"/>`);for(const l of plot.layers){if(selected&& !selected.includes(l.id))continue;parts.push(`<g id="${l.id}" inkscape:groupmode="layer" inkscape:label="${esc(l.name)} ${l.color}" fill="none" stroke="${l.color}" stroke-width="${o.pen}" stroke-linecap="round" stroke-linejoin="round">`);for(const p of l.paths)parts.push('<path d="'+p.map((v,i)=>(i?'L':'M')+v.map(n=>Number(n.toFixed(3))).join(' ')).join(' ')+'"/>');parts.push('</g>')}parts.push('</svg>');return parts.join('\n')}
+export function routePaths(paths) {
+  if (paths.length < 2) return paths.map((p) => p.map((x) => [...x]));
+  const cell = 12,
+    buckets = new Map(),
+    used = new Uint8Array(paths.length);
+  let minX = Infinity,
+    maxX = -Infinity,
+    minY = Infinity,
+    maxY = -Infinity;
+  paths.forEach((p, i) => {
+    for (const [rev, v] of [
+      [false, p[0]],
+      [true, p.at(-1)],
+    ]) {
+      const x = Math.floor(v[0] / cell),
+        y = Math.floor(v[1] / cell),
+        key = x + "," + y;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push({ i, rev, v });
+    }
+  });
+  const result = [];
+  let cursor = [0, 0];
+  for (let count = 0; count < paths.length; count++) {
+    const bx = Math.floor(cursor[0] / cell),
+      by = Math.floor(cursor[1] / cell);
+    let best = null,
+      bd = Infinity;
+    const limit = Math.max(
+      Math.abs(bx - minX),
+      Math.abs(bx - maxX),
+      Math.abs(by - minY),
+      Math.abs(by - maxY),
+    );
+    for (let r = 0; r <= limit; r++) {
+      for (let x = bx - r; x <= bx + r; x++)
+        for (let y = by - r; y <= by + r; y++) {
+          if (r > 0 && x !== bx - r && x !== bx + r && y !== by - r && y !== by + r) continue;
+          for (const candidate of buckets.get(x + "," + y) || []) {
+            if (used[candidate.i]) continue;
+            const dd = dist(cursor, candidate.v);
+            if (dd < bd) {
+              bd = dd;
+              best = candidate;
+            }
+          }
+        }
+      const edge = Math.min(
+        cursor[0] - (bx - r) * cell,
+        (bx + r + 1) * cell - cursor[0],
+        cursor[1] - (by - r) * cell,
+        (by + r + 1) * cell - cursor[1],
+      );
+      if (best && bd <= edge) break;
+    }
+    if (!best) break;
+    used[best.i] = 1;
+    const p = paths[best.i].map((x) => [...x]);
+    if (best.rev) p.reverse();
+    result.push(p);
+    cursor = p.at(-1);
+  }
+  return result;
+}
+export function prepare(plot, optimized = false) {
+  return {
+    ...plot,
+    layers: plot.layers.map((l) => ({ ...l, paths: optimized ? routePaths(l.paths) : l.paths })),
+  };
+}
+export function metrics(plot) {
+  let draw = 0,
+    travel = 0,
+    count = 0,
+    points = 0;
+  for (const l of plot.layers) {
+    let cursor = [0, 0];
+    for (const p of l.paths) {
+      count++;
+      points += p.length;
+      travel += dist(cursor, p[0]);
+      for (let i = 1; i < p.length; i++) draw += dist(p[i - 1], p[i]);
+      cursor = p.at(-1);
+    }
+  }
+  const o = plot.options;
+  return {
+    draw,
+    travel,
+    count,
+    points,
+    seconds: draw / o.speed + travel / o.travelSpeed + count * o.liftDelay,
+  };
+}
+const esc = (s) =>
+  String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[c],
+  );
+export function toSVG(plot, { selected = null, preview = false } = {}) {
+  const o = plot.options;
+  const parts = [
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${o.width}mm" height="${o.height}mm" viewBox="0 0 ${o.width} ${o.height}">`,
+    `<title>Linework / ${esc(o.mode)} / ${esc(o.seed)}</title>`,
+    `<metadata>${esc(JSON.stringify({ generator: "Linework 0.1", ...o }))}</metadata>`,
+  ];
+  if (preview) parts.push(`<rect width="${o.width}" height="${o.height}" fill="${o.background}"/>`);
+  for (const l of plot.layers) {
+    if (selected && !selected.includes(l.id)) continue;
+    parts.push(
+      `<g id="${l.id}" inkscape:groupmode="layer" inkscape:label="${esc(l.name)} ${l.color}" fill="none" stroke="${l.color}" stroke-width="${o.pen}" stroke-linecap="round" stroke-linejoin="round">`,
+    );
+    for (const p of l.paths)
+      parts.push(
+        '<path d="' +
+          p.map((v, i) => (i ? "L" : "M") + v.map((n) => Number(n.toFixed(3))).join(" ")).join(" ") +
+          '"/>',
+      );
+    parts.push("</g>");
+  }
+  parts.push("</svg>");
+  return parts.join("\n");
+}

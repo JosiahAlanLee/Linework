@@ -1,1 +1,7 @@
-{"name":"linework-plot-studio","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node tests/engine.test.mjs"}}
+{
+  "name": "linework-plot-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node tests/engine.test.mjs" }
+}

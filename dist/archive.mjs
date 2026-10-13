@@ -1,2 +1,55 @@
-const crcTable=Array.from({length:256},(_,n)=>{let c=n;for(let i=0;i<8;i++)c=c&1?0xedb88320^(c>>>1):c>>>1;return c>>>0});
-export function zip(files){const parts=[],central=[],encoder=new TextEncoder();let offset=0,centralSize=0;for(const file of files){const name=encoder.encode(file.name),data=encoder.encode(file.text);let crc=0xffffffff;for(const v of data)crc=crcTable[(crc^v)&255]^(crc>>>8);crc=(crc^0xffffffff)>>>0;const header=new Uint8Array(30+name.length),h=new DataView(header.buffer);h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint16(12,0x21,true);h.setUint32(14,crc,true);h.setUint32(18,data.length,true);h.setUint32(22,data.length,true);h.setUint16(26,name.length,true);header.set(name,30);parts.push(header,data);const entry=new Uint8Array(46+name.length),e=new DataView(entry.buffer);e.setUint32(0,0x02014b50,true);e.setUint16(4,20,true);e.setUint16(6,20,true);e.setUint16(8,0x0800,true);e.setUint16(14,0x21,true);e.setUint32(16,crc,true);e.setUint32(20,data.length,true);e.setUint32(24,data.length,true);e.setUint16(28,name.length,true);e.setUint32(42,offset,true);entry.set(name,46);central.push(entry);offset+=header.length+data.length;centralSize+=entry.length}const end=new Uint8Array(22),view=new DataView(end.buffer);view.setUint32(0,0x06054b50,true);view.setUint16(8,files.length,true);view.setUint16(10,files.length,true);view.setUint32(12,centralSize,true);view.setUint32(16,offset,true);return new Blob([...parts,...central,end],{type:'application/zip'})}
+const crcTable = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let i = 0; i < 8; i++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+export function zip(files) {
+  const parts = [],
+    central = [],
+    encoder = new TextEncoder();
+  let offset = 0,
+    centralSize = 0;
+  for (const file of files) {
+    const name = encoder.encode(file.name),
+      data = encoder.encode(file.text);
+    let crc = 0xffffffff;
+    for (const v of data) crc = crcTable[(crc ^ v) & 255] ^ (crc >>> 8);
+    crc = (crc ^ 0xffffffff) >>> 0;
+    const header = new Uint8Array(30 + name.length),
+      h = new DataView(header.buffer);
+    h.setUint32(0, 0x04034b50, true);
+    h.setUint16(4, 20, true);
+    h.setUint16(6, 0x0800, true);
+    h.setUint16(12, 0x21, true);
+    h.setUint32(14, crc, true);
+    h.setUint32(18, data.length, true);
+    h.setUint32(22, data.length, true);
+    h.setUint16(26, name.length, true);
+    header.set(name, 30);
+    parts.push(header, data);
+    const entry = new Uint8Array(46 + name.length),
+      e = new DataView(entry.buffer);
+    e.setUint32(0, 0x02014b50, true);
+    e.setUint16(4, 20, true);
+    e.setUint16(6, 20, true);
+    e.setUint16(8, 0x0800, true);
+    e.setUint16(14, 0x21, true);
+    e.setUint32(16, crc, true);
+    e.setUint32(20, data.length, true);
+    e.setUint32(24, data.length, true);
+    e.setUint16(28, name.length, true);
+    e.setUint32(42, offset, true);
+    entry.set(name, 46);
+    central.push(entry);
+    offset += header.length + data.length;
+    centralSize += entry.length;
+  }
+  const end = new Uint8Array(22),
+    view = new DataView(end.buffer);
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(8, files.length, true);
+  view.setUint16(10, files.length, true);
+  view.setUint32(12, centralSize, true);
+  view.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, end], { type: "application/zip" });
+}
