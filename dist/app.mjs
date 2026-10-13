@@ -1,15 +1,64 @@
 import { zip } from "./archive.mjs";
-import { DEFAULTS, normalize, generate, prepare, metrics, toSVG } from "./engine.mjs";
-const $ = (id) => document.getElementById(id),
-  descriptions = {
-    ribbons: "Long contours bend into open channels, with optional cross-grain threads.",
-    signal: "Interrupted vertical registers, grouped into irregular blocks of colour.",
-    wire: "Angular fans connect successive stations into a folded scaffold.",
-    image: "Convert a source image into tone-dependent, coloured hatch paths.",
-  };
+import { DEFAULTS, MOTIF_NAMES, normalize, generate, prepare, metrics, toSVG } from "./engine.mjs";
+
+const $ = (id) => document.getElementById(id);
+const MOTIF_INFO = {
+  ribbons: {
+    glyph: "∿",
+    label: "Flow ribbons",
+    text: "long contours bending into open channels, with optional cross-grain threads",
+  },
+  signal: {
+    glyph: "▥",
+    label: "Signal bands",
+    text: "interrupted vertical registers grouped into irregular blocks of colour",
+  },
+  wire: {
+    glyph: "⋈",
+    label: "Wire structures",
+    text: "angular fans connecting successive stations into a folded scaffold",
+  },
+  growth: {
+    glyph: "Ψ",
+    label: "Branching growth",
+    text: "branches grown toward scattered points, thickened as bundled strands, with fine hairs at the tips",
+  },
+};
+const ROLE_LABELS = { off: "Off", region: "Region", overlay: "Overlay" };
+const SETTING_KEYS = [
+  "seed",
+  "spacing",
+  "distortion",
+  "density",
+  "width",
+  "height",
+  "margin",
+  "pen",
+  "palette",
+  "background",
+  "speed",
+  "travelSpeed",
+  "liftDelay",
+  "blendScale",
+  "feather",
+];
+const TEXT_KEYS = ["seed", "palette", "background"];
+const CHECK_KEYS = ["crosshatch", "frame", "optimize"];
+
+const only = (name, extra = {}) => ({
+  motifs: Object.fromEntries(
+    MOTIF_NAMES.map((k) => [k, { role: k === name ? "region" : "off", amount: 50, pen: "all" }]),
+  ),
+  ...extra,
+});
+const mix = (roles) => ({
+  motifs: Object.fromEntries(
+    MOTIF_NAMES.map((k) => [k, { role: "off", amount: 50, pen: "all", ...roles[k] }]),
+  ),
+});
 const presets = {
   mineral: {
-    mode: "ribbons",
+    ...only("ribbons"),
     seed: "AL-184",
     palette: "earth",
     spacing: 1.15,
@@ -18,7 +67,7 @@ const presets = {
     crosshatch: true,
   },
   signal: {
-    mode: "signal",
+    ...only("signal"),
     seed: "SG-407",
     palette: "signal",
     spacing: 0.9,
@@ -27,7 +76,7 @@ const presets = {
     crosshatch: true,
   },
   wire: {
-    mode: "wire",
+    ...only("wire"),
     seed: "FL-029",
     palette: "earth",
     spacing: 1.2,
@@ -35,11 +84,49 @@ const presets = {
     density: 63,
     crosshatch: true,
   },
+  growth: {
+    ...only("growth"),
+    seed: "CO-77",
+    palette: "dusk",
+    spacing: 1.15,
+    distortion: 60,
+    density: 65,
+    crosshatch: true,
+  },
+  erosion: {
+    ...mix({
+      ribbons: { role: "region", amount: 55 },
+      growth: { role: "region", amount: 45 },
+      signal: { role: "overlay", amount: 25 },
+    }),
+    seed: "ER-052",
+    palette: "earth",
+    spacing: 1.15,
+    distortion: 60,
+    density: 65,
+    crosshatch: true,
+    blendScale: 140,
+    feather: 60,
+  },
+  relay: {
+    ...mix({
+      signal: { role: "region", amount: 50 },
+      wire: { role: "region", amount: 25 },
+      growth: { role: "region", amount: 25, pen: "1" },
+    }),
+    seed: "RL-208",
+    palette: "signal",
+    spacing: 1,
+    distortion: 65,
+    density: 70,
+    crosshatch: true,
+    blendScale: 160,
+    feather: 70,
+  },
 };
-let state = { ...DEFAULTS, paper: "a4", orientation: "portrait" },
+
+let state = { ...normalize(DEFAULTS), paper: "a4", orientation: "portrait" },
   plot = null,
-  source = null,
-  sourceURL = null,
   zoom = 1,
   visible = new Set(),
   worker = null,
@@ -50,6 +137,7 @@ let state = { ...DEFAULTS, paper: "a4", orientation: "portrait" },
   toastTimer = null,
   pendingExport = false,
   exportContext = null;
+
 try {
   const saved = JSON.parse(localStorage.getItem("linework-settings") || "null");
   if (saved)
@@ -59,86 +147,208 @@ try {
       paper: saved.paper || "custom",
       orientation: saved.orientation || "portrait",
     };
-  if (state.mode === "image") state.mode = "ribbons";
 } catch {}
+
 function toast(message) {
   $("toast").textContent = message;
   $("toast").hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => ($("toast").hidden = true), 6500);
 }
+
+function save() {
+  try {
+    localStorage.setItem("linework-settings", JSON.stringify(state));
+  } catch {}
+}
+
+// ---------------------------------------------------------------------------
+// Motif rows
+
+function buildMotifRows() {
+  const container = $("motifs");
+  for (const name of MOTIF_NAMES) {
+    const info = MOTIF_INFO[name],
+      row = document.createElement("div");
+    row.className = "motif";
+    row.dataset.motif = name;
+
+    const solo = document.createElement("button");
+    solo.className = "motif-name";
+    solo.title = "Use this motif alone";
+    solo.innerHTML = `<span class="glyph" aria-hidden="true">${info.glyph}</span>`;
+    solo.append(info.label);
+    solo.addEventListener("click", () => {
+      for (const k of MOTIF_NAMES) state.motifs[k].role = k === name ? "region" : "off";
+      changed();
+    });
+
+    const roles = document.createElement("div");
+    roles.className = "roles";
+    roles.setAttribute("role", "group");
+    roles.setAttribute("aria-label", info.label + " role");
+    for (const role of Object.keys(ROLE_LABELS)) {
+      const b = document.createElement("button");
+      b.dataset.role = role;
+      b.textContent = ROLE_LABELS[role];
+      b.addEventListener("click", () => {
+        if (
+          role === "off" &&
+          MOTIF_NAMES.filter((k) => k !== name && state.motifs[k].role !== "off").length === 0
+        ) {
+          toast("Keep at least one motif on.");
+          return;
+        }
+        state.motifs[name].role = role;
+        changed();
+      });
+      roles.append(b);
+    }
+
+    const detail = document.createElement("div");
+    detail.className = "motif-detail";
+    const amount = document.createElement("input");
+    amount.type = "range";
+    amount.min = 1;
+    amount.max = 100;
+    amount.className = "amount";
+    amount.setAttribute("aria-label", info.label + " amount");
+    const out = document.createElement("output");
+    amount.addEventListener("input", () => {
+      state.motifs[name].amount = Number(amount.value);
+      out.value = amount.value + "%";
+      save();
+      requestGenerate();
+    });
+    const pen = document.createElement("select");
+    pen.className = "pen-select";
+    pen.setAttribute("aria-label", info.label + " pen");
+    pen.addEventListener("change", () => {
+      state.motifs[name].pen = pen.value;
+      changed();
+    });
+    detail.append(amount, out, pen);
+    row.append(solo, roles, detail);
+    container.append(row);
+  }
+}
+
+function syncMotifRows() {
+  const regions = MOTIF_NAMES.filter((k) => state.motifs[k].role === "region");
+  for (const row of $("motifs").children) {
+    const name = row.dataset.motif,
+      m = state.motifs[name];
+    row.dataset.role = m.role;
+    for (const b of row.querySelectorAll("[data-role]")) {
+      b.classList.toggle("active", b.dataset.role === m.role);
+      b.setAttribute("aria-pressed", b.dataset.role === m.role);
+    }
+    const detail = row.querySelector(".motif-detail"),
+      amount = row.querySelector(".amount"),
+      pen = row.querySelector(".pen-select");
+    detail.hidden = m.role === "off";
+    amount.value = m.amount;
+    row.querySelector("output").value = m.amount + "%";
+    // A lone region fills the page, so its amount has no effect.
+    amount.disabled = m.role === "region" && regions.length === 1;
+    amount.title =
+      m.role === "overlay"
+        ? "Share of the page this overlay covers"
+        : amount.disabled
+          ? "A single region fills the page"
+          : "Share of the page among regions";
+    const options = ["all", ...state.colors.map((_, i) => String(i + 1))];
+    pen.replaceChildren(
+      ...options.map((v) => {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = v === "all" ? "All pens" : "Pen " + v;
+        return o;
+      }),
+    );
+    pen.value = options.includes(m.pen) ? m.pen : "all";
+  }
+}
+
+function describe() {
+  const m = state.motifs,
+    active = MOTIF_NAMES.filter((k) => m[k].role !== "off");
+  if (state.mode !== "blend") {
+    const info = MOTIF_INFO[active[0]];
+    return info.label + ": " + info.text + ".";
+  }
+  const regions = active.filter((k) => m[k].role === "region"),
+    overlays = active.filter((k) => m[k].role === "overlay"),
+    total = regions.reduce((s, k) => s + m[k].amount, 0),
+    name = (k) => MOTIF_INFO[k].label.toLowerCase(),
+    parts = [];
+  if (regions.length === 1) parts.push(`${MOTIF_INFO[regions[0]].label} fills the page.`);
+  else if (regions.length)
+    parts.push(
+      "Regions: " +
+        regions.map((k) => `${name(k)} ${Math.round((m[k].amount / total) * 100)}%`).join(", ") +
+        ".",
+    );
+  if (overlays.length)
+    parts.push(
+      "Overlay: " + overlays.map((k) => `${name(k)} across ${m[k].amount}% of the page`).join(", ") + ".",
+    );
+  return parts.join(" ");
+}
+
+// ---------------------------------------------------------------------------
+
 function sync() {
-  state = normalize({ ...state });
-  for (const key of [
-    "seed",
-    "spacing",
-    "distortion",
-    "density",
-    "width",
-    "height",
-    "margin",
-    "pen",
-    "palette",
-    "background",
-    "speed",
-    "travelSpeed",
-    "liftDelay",
-  ])
-    $(key).value = state[key];
-  for (const key of ["crosshatch", "frame", "invert", "optimize"]) $(key).checked = !!state[key];
+  state = { ...normalize(state), paper: state.paper, orientation: state.orientation };
+  for (const key of SETTING_KEYS) $(key).value = state[key];
+  for (const key of CHECK_KEYS) $(key).checked = !!state[key];
   $("paper").value = state.paper || "custom";
   $("orientation").value = state.orientation || "portrait";
   state.colors.slice(0, 3).forEach((c, i) => ($("color" + (i + 1)).value = c));
   $("customSize").hidden = state.paper !== "custom";
   $("customPens").hidden = state.palette !== "custom";
-  $("imageSection").hidden = state.mode !== "image";
-  document.querySelectorAll("[data-mode]").forEach((b) => {
-    b.classList.toggle("active", b.dataset.mode === state.mode);
-    b.setAttribute("aria-pressed", b.dataset.mode === state.mode);
-  });
-  $("modeDescription").textContent = descriptions[state.mode];
-  $("distortion").disabled = state.mode === "image";
-  $("newSeed").disabled = state.mode === "image";
+  syncMotifRows();
+  $("blendSection").hidden = state.mode !== "blend";
+  $("modeDescription").textContent = describe();
   outputs();
 }
+
 function outputs() {
   $("spacingOut").value = Number(state.spacing).toFixed(2) + " mm";
   $("distortionOut").value = state.distortion + "%";
   $("densityOut").value = state.density + "%";
-  const overlap = state.spacing < state.pen * 2;
-  $("spacingWarning").hidden = !overlap;
+  $("blendScaleOut").value = state.blendScale + " mm";
+  $("featherOut").value = state.feather + "%";
+  $("spacingWarning").hidden = !(state.spacing < state.pen * 2);
   $("spacingWarning").textContent =
     "Spacing is less than twice the pen width. Ink may merge; use a small proof.";
 }
+
 function readControls() {
-  for (const key of [
-    "seed",
-    "spacing",
-    "distortion",
-    "density",
-    "width",
-    "height",
-    "margin",
-    "pen",
-    "palette",
-    "background",
-    "speed",
-    "travelSpeed",
-    "liftDelay",
-  ])
-    state[key] = ["seed", "palette", "background"].includes(key) ? $(key).value : Number($(key).value);
-  for (const key of ["crosshatch", "frame", "invert", "optimize"]) state[key] = $(key).checked;
+  for (const key of SETTING_KEYS) state[key] = TEXT_KEYS.includes(key) ? $(key).value : Number($(key).value);
+  for (const key of CHECK_KEYS) state[key] = $(key).checked;
   state.colors = [1, 2, 3].map((i) => $("color" + i).value);
-  state = normalize(state);
+  state = { ...normalize(state), paper: state.paper, orientation: state.orientation };
   outputs();
-  try {
-    localStorage.setItem("linework-settings", JSON.stringify(state));
-  } catch {}
+  save();
 }
+
+/** After a motif change: re-normalise, refresh controls, regenerate. */
+function changed() {
+  readControls();
+  sync();
+  save();
+  requestGenerate();
+}
+
 function selectedPlot() {
   return { ...plot, layers: plot.layers.filter((l) => visible.has(l.id)) };
 }
+
 function updateMetrics(stat) {
+  const sorted = plot?.sorted;
+  $("travelLabel").textContent = "TRAVEL / " + (sorted ? "SORTED" : "UNSORTED");
+  $("timeLabel").textContent = "ESTIMATED / " + (sorted ? "SORTED" : "UNSORTED");
   $("pathCount").textContent = stat.count.toLocaleString();
   $("drawLength").textContent = (stat.draw / 1000).toFixed(1) + " m";
   $("travelLength").textContent = (stat.travel / 1000).toFixed(1) + " m";
@@ -147,6 +357,7 @@ function updateMetrics(stat) {
       ? Math.max(1, Math.round(stat.seconds / 60)) + " min"
       : (stat.seconds / 3600).toFixed(1) + " hr";
 }
+
 function fit() {
   if (!plot) return;
   const ratio = plot.options.width / plot.options.height,
@@ -154,6 +365,7 @@ function fit() {
   $("paperWrap").style.width = width * zoom + "px";
   $("zoomValue").textContent = Math.round(zoom * 100) + "%";
 }
+
 function draw() {
   if (!plot) return;
   const o = plot.options,
@@ -194,10 +406,7 @@ function draw() {
     }
     ctx.stroke();
   }
-  $("canvas").setAttribute(
-    "aria-label",
-    `${descriptions[o.mode]} ${o.width} by ${o.height} millimetres, seed ${o.seed}.`,
-  );
+  c.setAttribute("aria-label", `${describe()} ${o.width} by ${o.height} millimetres, seed ${o.seed}.`);
   $("pageLabel").textContent =
     (state.paper === "custom" ? "CUSTOM" : state.paper.toUpperCase()) +
     " / " +
@@ -209,6 +418,7 @@ function draw() {
   updateMetrics(metrics(selectedPlot()));
   fit();
 }
+
 function buildLayers() {
   const old = new Set(visible);
   visible = new Set();
@@ -216,12 +426,12 @@ function buildLayers() {
   for (const l of plot.layers) {
     const checked = old.size ? old.has(l.id) : true;
     if (checked) visible.add(l.id);
-    const label = document.createElement("label");
+    const label = document.createElement("label"),
+      input = document.createElement("input"),
+      swatch = document.createElement("span");
     label.className = "layer";
-    const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = checked;
-    const swatch = document.createElement("span");
     swatch.className = "swatch";
     swatch.style.background = l.color;
     label.append(input, swatch, document.createTextNode(l.name));
@@ -232,11 +442,12 @@ function buildLayers() {
     $("layers").append(label);
   }
 }
+
 function onGenerated(result) {
   if (result.id !== job) return;
   if (result.error) {
     $("status").textContent = result.error;
-    if (state.mode !== "image" || source) toast(result.error);
+    toast(result.error);
     return;
   }
   plot = result.plot;
@@ -244,12 +455,15 @@ function onGenerated(result) {
   draw();
   $("status").textContent = plot.limited
     ? "Path limit reached — reduce density"
-    : "Ready / " + plot.options.mode.replace("image", "image hatching");
+    : "Ready / " +
+      (plot.options.mode === "blend" ? "blend" : MOTIF_INFO[plot.options.mode].label.toLowerCase());
   $("export").disabled = false;
   $("exportPen").disabled = false;
 }
+
 function requestGenerate() {
   clearTimeout(timer);
+  $("status").textContent = "Drawing…";
   $("export").disabled = true;
   $("exportPen").disabled = true;
   timer = setTimeout(() => {
@@ -257,6 +471,7 @@ function requestGenerate() {
     runGenerate();
   }, 150);
 }
+
 function runGenerate() {
   readControls();
   const id = ++job;
@@ -264,16 +479,10 @@ function runGenerate() {
     worker.terminate();
     worker = null;
   }
-  if (state.mode === "image" && !source) {
-    $("status").textContent = "Choose a source image";
-    $("export").disabled = true;
-    $("exportPen").disabled = true;
-    return;
-  }
   $("status").textContent = "Drawing…";
   $("export").disabled = true;
   $("exportPen").disabled = true;
-  const message = { kind: "generate", id, options: state, raster: state.mode === "image" ? source : null };
+  const message = { kind: "generate", id, options: state };
   try {
     worker = new Worker(new URL("./worker.mjs", import.meta.url), { type: "module" });
     worker.onmessage = ({ data }) => {
@@ -291,13 +500,16 @@ function runGenerate() {
     fallbackGenerate(message);
   }
 }
+
 function fallbackGenerate(message) {
   try {
-    onGenerated({ id: message.id, plot: generate(message.options, message.raster) });
+    const raw = generate(message.options);
+    onGenerated({ id: message.id, plot: prepare(raw, raw.options.optimize) });
   } catch (e) {
     onGenerated({ id: message.id, error: e.message });
   }
 }
+
 function setPaper() {
   state.paper = $("paper").value;
   state.orientation = $("orientation").value;
@@ -308,47 +520,10 @@ function setPaper() {
     [state.width, state.height] =
       state.orientation === "landscape" ? [dimensions[1], dimensions[0]] : dimensions;
     sync();
-  } else {
-    $("customSize").hidden = false;
-  }
+  } else $("customSize").hidden = false;
   requestGenerate();
 }
-async function loadImageFile(file) {
-  if (!file) return;
-  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) {
-    toast("Choose a PNG, JPG, or WebP image.");
-    return;
-  }
-  if (file.size > 30 * 1024 * 1024) {
-    toast("Use an image smaller than 30 MB.");
-    return;
-  }
-  const url = URL.createObjectURL(file);
-  try {
-    await imageFromURL(url, file.name);
-    state.mode = "image";
-    sync();
-    requestGenerate();
-  } catch {
-    toast("The image could not be decoded.");
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
-async function imageFromURL(url, name) {
-  const img = new Image();
-  img.src = url;
-  await img.decode();
-  const scale = Math.min(1, 900 / Math.max(img.width, img.height)),
-    c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(img.width * scale));
-  c.height = Math.max(1, Math.round(img.height * scale));
-  const ctx = c.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0, c.width, c.height);
-  source = { width: c.width, height: c.height, data: ctx.getImageData(0, 0, c.width, c.height).data };
-  sourceURL = c.toDataURL("image/png");
-  $("imageName").textContent = name + " / " + c.width + " × " + c.height;
-}
+
 function download(content, name, mime) {
   const blob = content instanceof Blob ? content : new Blob([content], { type: mime }),
     url = URL.createObjectURL(blob),
@@ -360,13 +535,13 @@ function download(content, name, mime) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 20000);
 }
+
 function filename() {
   return "linework-" + plot.options.mode + "-" + plot.options.seed.replace(/[^\w-]+/g, "-").slice(0, 50);
 }
 
-function recipe() {
-  return { version: 1, ...state, imageDataURL: state.mode === "image" ? sourceURL : null };
-}
+const recipe = (options) => ({ version: 2, ...options });
+
 function onExport(result, separate) {
   pendingExport = false;
   $("export").disabled = !!worker || !!timer;
@@ -391,6 +566,7 @@ function onExport(result, separate) {
     " m travel" +
     (context.optimize ? " after sorting" : "");
 }
+
 function exportDrawing(separate = false) {
   if (!plot || pendingExport) return;
   if (worker || timer) {
@@ -402,10 +578,6 @@ function exportDrawing(separate = false) {
     return;
   }
   readControls();
-  if (state.mode !== plot.options.mode) {
-    toast("Wait for the current drawing to finish.");
-    return;
-  }
   pendingExport = true;
   const exported = selectedPlot();
   exported.options = {
@@ -415,11 +587,7 @@ function exportDrawing(separate = false) {
     travelSpeed: state.travelSpeed,
     liftDelay: state.liftDelay,
   };
-  exportContext = {
-    name: filename(),
-    optimize: state.optimize,
-    recipe: { version: 1, ...exported.options, imageDataURL: state.mode === "image" ? sourceURL : null },
-  };
+  exportContext = { name: filename(), optimize: state.optimize, recipe: recipe(exported.options) };
   $("export").disabled = true;
   $("exportPen").disabled = true;
   $("status").textContent = state.optimize ? "Sorting paths…" : "Preparing SVG…";
@@ -468,22 +636,26 @@ function exportDrawing(separate = false) {
     fallback();
   }
 }
-document.querySelectorAll("[data-mode]").forEach((b) =>
-  b.addEventListener("click", () => {
-    readControls();
-    state.mode = b.dataset.mode;
-    sync();
-    requestGenerate();
-  }),
-);
+
+// ---------------------------------------------------------------------------
+// Wiring
+
+buildMotifRows();
+
 document.querySelectorAll("[data-preset]").forEach((b) =>
   b.addEventListener("click", () => {
-    state = { ...state, ...presets[b.dataset.preset] };
+    state = {
+      ...state,
+      blendScale: DEFAULTS.blendScale,
+      feather: DEFAULTS.feather,
+      ...structuredClone(presets[b.dataset.preset]),
+    };
     visible.clear();
     sync();
     requestGenerate();
   }),
 );
+
 for (const id of [
   "seed",
   "spacing",
@@ -497,22 +669,21 @@ for (const id of [
   "background",
   "crosshatch",
   "frame",
-  "invert",
   "color1",
   "color2",
   "color3",
+  "blendScale",
+  "feather",
 ])
-  $(id).addEventListener(
-    ["crosshatch", "frame", "invert", "palette"].includes(id) ? "change" : "input",
-    () => {
-      readControls();
-      if (id === "palette") {
-        visible.clear();
-        sync();
-      }
-      requestGenerate();
-    },
-  );
+  $(id).addEventListener(["crosshatch", "frame", "palette"].includes(id) ? "change" : "input", () => {
+    readControls();
+    if (id === "palette") {
+      visible.clear();
+      sync();
+    }
+    requestGenerate();
+  });
+
 for (const id of ["speed", "travelSpeed", "liftDelay"])
   $(id).addEventListener("change", () => {
     readControls();
@@ -526,7 +697,10 @@ for (const id of ["speed", "travelSpeed", "liftDelay"])
       draw();
     }
   });
-$("optimize").addEventListener("change", readControls);
+$("optimize").addEventListener("change", () => {
+  readControls();
+  requestGenerate();
+});
 $("paper").addEventListener("change", setPaper);
 $("orientation").addEventListener("change", () => {
   if (state.paper === "custom") {
@@ -560,51 +734,22 @@ $("fit").addEventListener("click", () => {
   fit();
 });
 window.addEventListener("resize", fit);
-$("imageInput").addEventListener("change", (e) => loadImageFile(e.target.files[0]));
-for (const type of ["dragenter", "dragover"])
-  $("dropzone").addEventListener(type, (e) => {
-    e.preventDefault();
-    $("dropzone").classList.add("drag");
-  });
-for (const type of ["dragleave", "drop"])
-  $("dropzone").addEventListener(type, (e) => {
-    e.preventDefault();
-    $("dropzone").classList.remove("drag");
-    if (type === "drop") loadImageFile(e.dataTransfer.files[0]);
-  });
-$("sampleImage").addEventListener("click", async () => {
-  try {
-    await imageFromURL("sample-thread.png", "Thread sketch reference");
-    state.invert = true;
-    state.palette = "carbon";
-    state.spacing = 1.2;
-    state.density = 60;
-    sync();
-    requestGenerate();
-  } catch {
-    toast("The sample image could not be loaded.");
-  }
-});
 $("export").addEventListener("click", () => exportDrawing());
 $("exportPen").addEventListener("click", () => exportDrawing(true));
 $("saveConfig").addEventListener("click", () => {
   readControls();
-  download(JSON.stringify(recipe(), null, 2), "linework-recipe.json", "application/json");
+  download(JSON.stringify(recipe(state), null, 2), "linework-recipe.json", "application/json");
 });
 $("loadConfig").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   try {
-    if (file.size > 12 * 1024 * 1024) throw new Error("Recipe is too large.");
+    if (file.size > 2 * 1024 * 1024) throw new Error("Recipe is too large.");
     const data = JSON.parse(await file.text());
-    if (data.version !== 1 || !data.mode) throw new Error("Choose a Linework v1 recipe.");
-    if (data.imageDataURL) {
-      if (!/^data:image\/png;base64,/.test(data.imageDataURL))
-        throw new Error("Invalid source image in recipe.");
-      await imageFromURL(data.imageDataURL, "Recipe source");
-    }
+    if (![1, 2].includes(data.version) || !(data.mode || data.motifs))
+      throw new Error("Choose a Linework recipe.");
+    const legacyImage = data.version === 1 && data.mode === "image";
     state = {
-      ...DEFAULTS,
       ...normalize(data),
       paper: ["a4", "a3", "letter", "square", "custom"].includes(data.paper) ? data.paper : "custom",
       orientation: data.orientation === "landscape" ? "landscape" : "portrait",
@@ -612,14 +757,14 @@ $("loadConfig").addEventListener("change", async (e) => {
     visible.clear();
     sync();
     requestGenerate();
-    toast("Recipe loaded.");
+    toast(legacyImage ? "Image hatching was removed; loaded the recipe as flow ribbons." : "Recipe loaded.");
   } catch (err) {
     toast(err.message || "The recipe could not be read.");
   }
   e.target.value = "";
 });
 $("reset").addEventListener("click", () => {
-  state = { ...DEFAULTS, paper: "a4", orientation: "portrait" };
+  state = { ...normalize(DEFAULTS), paper: "a4", orientation: "portrait" };
   visible.clear();
   zoom = 1;
   sync();
@@ -634,5 +779,6 @@ $("notes").addEventListener("click", (e) => {
       $("notes").close();
   }
 });
+
 sync();
 runGenerate();

@@ -1,21 +1,130 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#222724"><title>Linework — Pen Plot Studio</title><meta name="description" content="Generate reproducible, layered SVG line drawings for physical pen plots."><link rel="stylesheet" href="style.css"></head>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#222724">
+<title>Linework — Pen Plot Studio</title>
+<meta name="description" content="Generate reproducible, layered SVG line drawings for physical pen plots.">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
 <body>
-<header><a class="wordmark" href="./" aria-label="Linework home"><span class="mark">≋</span> LINEWORK<span class="edition">PEN PLOT STUDIO / 01</span></a><div class="header-actions"><button id="help" class="quiet">Plotting notes</button><button id="export" class="primary">Export SVG <span>↗</span></button></div></header>
+<header>
+  <a class="wordmark" href="./" aria-label="Linework home"><span class="mark">≋</span> LINEWORK<span class="edition">PEN PLOT STUDIO / 02</span></a>
+  <div class="header-actions"><button id="help" class="quiet">Plotting notes</button><button id="export" class="primary">Export SVG <span>↗</span></button></div>
+</header>
 <main>
 <aside class="controls">
- <section class="intro"><span class="eyebrow">GENERATIVE DRAWING IN MILLIMETRES</span><h1>A system of lines.</h1><p>Compose, tune, then draw with a pen.</p></section>
- <section><div class="section-label"><span>01 / COMPOSITION</span><span class="tiny">SEEDED</span></div><div class="modes" role="group" aria-label="Drawing mode"><button data-mode="ribbons" class="active"><span>∿</span>Flow ribbons</button><button data-mode="signal"><span>▥</span>Signal bands</button><button data-mode="wire"><span>⋈</span>Wire structures</button><button data-mode="image"><span>▧</span>Image hatching</button></div><p id="modeDescription" class="hint"></p><div class="seed-row"><label for="seed">Seed</label><input id="seed" value="AL-184" maxlength="80" spellcheck="false"><button id="newSeed" aria-label="Randomize seed" title="New seed">↻</button></div></section>
- <section id="imageSection" hidden><div class="section-label">SOURCE IMAGE</div><label class="dropzone" id="dropzone" for="imageInput"><strong id="imageName">Choose an image</strong><span>or drop a PNG, JPG, or WebP</span><input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp"></label><div class="row"><button id="sampleImage" class="small-button">Try the thread sketch</button><label class="check"><input id="invert" type="checkbox">Invert tone</label></div><p class="hint">Tone controls hatch coverage; colour selects the closest pen. The source is fitted inside the page margins.</p></section>
- <section><div class="section-label">02 / LINE & STRUCTURE</div><label class="range-label" for="spacing"><span>Line spacing</span><output id="spacingOut">1.15 mm</output></label><input id="spacing" type="range" min="0.35" max="4" step="0.05" value="1.15"><label class="range-label" for="distortion"><span>Displacement</span><output id="distortionOut">60%</output></label><input id="distortion" type="range" min="1" max="100" value="60"><label class="range-label" for="density"><span>Density</span><output id="densityOut">65%</output></label><input id="density" type="range" min="1" max="100" value="65"><div class="row checks"><label class="check"><input id="crosshatch" type="checkbox" checked>Secondary lines</label><label class="check"><input id="frame" type="checkbox">Frame</label></div><p id="spacingWarning" class="warning" hidden></p></section>
- <section><div class="section-label">03 / PAPER & PENS</div><div class="two-col"><label>Paper<select id="paper"><option value="a4">A4 · 210 × 297</option><option value="a3">A3 · 297 × 420</option><option value="letter">Letter · 216 × 279</option><option value="square">Square · 210 × 210</option><option value="custom">Custom size</option></select></label><label>Orientation<select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label></div><div class="two-col" id="customSize" hidden><label>Width / mm<input id="width" type="number" min="50" max="900" value="210"></label><label>Height / mm<input id="height" type="number" min="50" max="900" value="297"></label></div><div class="two-col"><label>Margin / mm<input id="margin" type="number" min="1" max="100" step="1" value="15"></label><label>Pen width / mm<input id="pen" type="number" min="0.05" max="2" step="0.05" value="0.30"></label></div><label>Pen palette<select id="palette"><option value="earth">Mineral · charcoal / rust / sage</option><option value="carbon">Carbon · one pen</option><option value="signal">Signal · carbon / red / ochre</option><option value="dusk">Dusk · indigo / rose / slate</option><option value="custom">Custom pens</option></select></label><div id="customPens" class="custom-pens" hidden><label>Pen 1<input id="color1" type="color" value="#383c37"></label><label>Pen 2<input id="color2" type="color" value="#8c4f3c"></label><label>Pen 3<input id="color3" type="color" value="#798276"></label></div><div id="layers" class="layers" aria-label="Visible and exported pen layers"></div><div class="row"><label class="paper-color">Preview paper<input id="background" type="color" value="#f4efe4"></label><button id="exportPen" class="small-button">Export pens separately</button></div><p class="hint">Paper colour is preview only. Each pen is a named SVG layer. Unchecked layers are omitted from export.</p></section>
- <section><div class="section-label">04 / PLOT PREPARATION</div><label class="check"><input id="optimize" type="checkbox" checked>Sort paths to reduce pen-up travel</label><p class="hint">Applied on export. No scaling or machine control is added.</p><details><summary>Time estimate settings</summary><div class="two-col"><label>Draw / mm per s<input id="speed" type="number" min="1" max="200" value="40"></label><label>Travel / mm per s<input id="travelSpeed" type="number" min="1" max="300" value="100"></label></div><label>Lift cycle / seconds<input id="liftDelay" type="number" min="0.05" max="5" step="0.05" value="0.35"></label></details><div class="row"><button id="saveConfig" class="small-button">Save recipe</button><label class="small-button load-label" for="loadConfig">Load recipe<input id="loadConfig" type="file" accept="application/json,.json"></label><button id="reset" class="quiet">Reset</button></div></section>
- <footer class="sidebar-footer">LINEWORK / V0.1<br>Local generation. Every mark is a path.</footer>
+  <section class="intro"><span class="eyebrow">GENERATIVE DRAWING IN MILLIMETRES</span><h1>A system of lines.</h1><p>Compose, tune, then draw with a pen.</p></section>
+
+  <section>
+    <div class="section-label"><span>01 / COMPOSITION</span><span class="tiny">SEEDED</span></div>
+    <div id="motifs" class="motifs" aria-label="Motifs"></div>
+    <p id="modeDescription" class="hint"></p>
+    <div class="seed-row"><label for="seed">Seed</label><input id="seed" value="AL-184" maxlength="80" spellcheck="false"><button id="newSeed" aria-label="Randomize seed" title="New seed">↻</button></div>
+  </section>
+
+  <section id="blendSection">
+    <div class="section-label"><span>BLEND</span><span class="tiny">REGIONS + OVERLAYS</span></div>
+    <label class="range-label" for="blendScale"><span>Region size</span><output id="blendScaleOut">140 mm</output></label>
+    <input id="blendScale" type="range" min="20" max="400" step="5" value="140">
+    <label class="range-label" for="feather"><span>Transition</span><output id="featherOut">60%</output></label>
+    <input id="feather" type="range" min="0" max="100" value="60">
+    <p class="hint">Regions share the page, and their amounts set each one's share. Overlays draw across the regions over their own share of the page. A wider transition lets one motif thin out as the next fills in.</p>
+  </section>
+
+  <section>
+    <div class="section-label">02 / LINE &amp; STRUCTURE</div>
+    <label class="range-label" for="spacing"><span>Line spacing</span><output id="spacingOut">1.15 mm</output></label>
+    <input id="spacing" type="range" min="0.35" max="4" step="0.05" value="1.15">
+    <label class="range-label" for="distortion"><span>Displacement</span><output id="distortionOut">60%</output></label>
+    <input id="distortion" type="range" min="1" max="100" value="60">
+    <label class="range-label" for="density"><span>Density</span><output id="densityOut">65%</output></label>
+    <input id="density" type="range" min="1" max="100" value="65">
+    <div class="row checks"><label class="check"><input id="crosshatch" type="checkbox" checked>Secondary lines</label><label class="check"><input id="frame" type="checkbox">Frame</label></div>
+    <p id="spacingWarning" class="warning" hidden></p>
+  </section>
+
+  <section>
+    <div class="section-label">03 / PAPER &amp; PENS</div>
+    <div class="two-col">
+      <label>Paper<select id="paper"><option value="a4">A4 · 210 × 297</option><option value="a3">A3 · 297 × 420</option><option value="letter">Letter · 216 × 279</option><option value="square">Square · 210 × 210</option><option value="custom">Custom size</option></select></label>
+      <label>Orientation<select id="orientation"><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select></label>
+    </div>
+    <div class="two-col" id="customSize" hidden>
+      <label>Width / mm<input id="width" type="number" min="50" max="900" step="0.1" value="210"></label>
+      <label>Height / mm<input id="height" type="number" min="50" max="900" step="0.1" value="297"></label>
+    </div>
+    <div class="two-col">
+      <label>Margin / mm<input id="margin" type="number" min="1" max="100" step="1" value="15"></label>
+      <label>Pen width / mm<input id="pen" type="number" min="0.05" max="2" step="0.05" value="0.30"></label>
+    </div>
+    <label>Pen palette<select id="palette"><option value="earth">Mineral · charcoal / rust / sage</option><option value="carbon">Carbon · one pen</option><option value="signal">Signal · carbon / red / ochre</option><option value="dusk">Dusk · indigo / rose / slate</option><option value="custom">Custom pens</option></select></label>
+    <div id="customPens" class="custom-pens" hidden>
+      <label>Pen 1<input id="color1" type="color" value="#383c37"></label>
+      <label>Pen 2<input id="color2" type="color" value="#8c4f3c"></label>
+      <label>Pen 3<input id="color3" type="color" value="#798276"></label>
+    </div>
+    <div id="layers" class="layers" aria-label="Visible and exported pen layers"></div>
+    <div class="row"><label class="paper-color">Preview paper<input id="background" type="color" value="#f4efe4"></label><button id="exportPen" class="small-button">Export pens separately</button></div>
+    <p class="hint">Paper colour is preview only. Each pen is a named SVG layer. Unchecked layers are omitted from export.</p>
+  </section>
+
+  <section>
+    <div class="section-label">04 / PLOT PREPARATION</div>
+    <label class="check"><input id="optimize" type="checkbox" checked>Sort paths to reduce pen-up travel</label>
+    <p class="hint">Sorting is applied to the preview figures and the export. No scaling or machine control is added.</p>
+    <details><summary>Time estimate settings</summary>
+      <div class="two-col"><label>Draw / mm per s<input id="speed" type="number" min="1" max="200" value="40"></label><label>Travel / mm per s<input id="travelSpeed" type="number" min="1" max="300" value="100"></label></div>
+      <label>Lift cycle / seconds<input id="liftDelay" type="number" min="0.05" max="5" step="0.05" value="0.35"></label>
+    </details>
+    <div class="row"><button id="saveConfig" class="small-button">Save recipe</button><label class="small-button load-label" for="loadConfig">Load recipe<input id="loadConfig" type="file" accept="application/json,.json"></label><button id="reset" class="quiet">Reset</button></div>
+  </section>
+  <footer class="sidebar-footer">LINEWORK / V0.2<br>Local generation. Every mark is a path.</footer>
 </aside>
-<div class="workspace"><div class="workspace-toolbar"><div><span class="status-dot"></span><span id="status" role="status" aria-live="polite">Ready to draw</span></div><div class="view-controls"><label class="check"><input id="showTravel" type="checkbox">Travel</label><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomValue">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fit" class="quiet">Fit</button></div></div><div id="stage"><div id="paperWrap"><canvas id="canvas" aria-label="Generated pen drawing preview" role="img"></canvas><div class="page-caption"><span id="pageLabel">A4 / 210 × 297 MM</span><span id="seedLabel">SEED AL-184</span></div></div></div><div class="metrics"><div><span>PATHS / PEN LIFTS</span><strong id="pathCount">—</strong></div><div><span>INK DISTANCE</span><strong id="drawLength">—</strong></div><div><span>TRAVEL / UNSORTED</span><strong id="travelLength">—</strong></div><div><span>ESTIMATED / UNSORTED</span><strong id="timeEstimate">—</strong></div></div><section class="preset-section"><div class="preset-heading"><span class="eyebrow">START FROM A STUDY</span><span class="hint">Reference-inspired systems, with new geometry</span></div><div class="presets"><button data-preset="mineral"><img src="previews/ribbons.png" alt="Undulating mineral-coloured line bands"><span>01<span>Mineral ribbons</span>↗</span></button><button data-preset="signal"><img src="previews/signal.png" alt="Layered red and black signal columns"><span>02<span>Interrupted signal</span>↗</span></button><button data-preset="wire"><img src="previews/wire.png" alt="Angular cascading wire structures"><span>03<span>Folded scaffold</span>↗</span></button></div></section></div>
+
+<div class="workspace">
+  <div class="workspace-toolbar">
+    <div><span class="status-dot"></span><span id="status" role="status" aria-live="polite">Ready to draw</span></div>
+    <div class="view-controls"><label class="check"><input id="showTravel" type="checkbox">Travel</label><button id="zoomOut" aria-label="Zoom out">−</button><span id="zoomValue">100%</span><button id="zoomIn" aria-label="Zoom in">+</button><button id="fit" class="quiet">Fit</button></div>
+  </div>
+  <div id="stage"><div id="paperWrap"><canvas id="canvas" aria-label="Generated pen drawing preview" role="img"></canvas><div class="page-caption"><span id="pageLabel">A4 / 210 × 297 MM</span><span id="seedLabel">SEED AL-184</span></div></div></div>
+  <div class="metrics">
+    <div><span>PATHS / PEN LIFTS</span><strong id="pathCount">—</strong></div>
+    <div><span>INK DISTANCE</span><strong id="drawLength">—</strong></div>
+    <div><span id="travelLabel">TRAVEL / SORTED</span><strong id="travelLength">—</strong></div>
+    <div><span id="timeLabel">ESTIMATED / SORTED</span><strong id="timeEstimate">—</strong></div>
+  </div>
+  <section class="preset-section">
+    <div class="preset-heading"><span class="eyebrow">START FROM A STUDY</span><span class="hint">Single motifs and blends</span></div>
+    <div class="presets">
+      <button data-preset="mineral"><img src="previews/ribbons.png" alt="Undulating mineral-coloured line bands"><span>01<span>Mineral ribbons</span>↗</span></button>
+      <button data-preset="signal"><img src="previews/signal.png" alt="Layered red and black signal columns"><span>02<span>Interrupted signal</span>↗</span></button>
+      <button data-preset="wire"><img src="previews/wire.png" alt="Angular cascading wire structures"><span>03<span>Folded scaffold</span>↗</span></button>
+      <button data-preset="growth"><img src="previews/growth.png" alt="Branching tree-like growth drawn in bundled strands"><span>04<span>Root system</span>↗</span></button>
+      <button data-preset="erosion"><img src="previews/erosion.png" alt="Ribbons thinning into branching growth with signal bars across them"><span>05<span>Erosion</span>↗</span></button>
+      <button data-preset="relay"><img src="previews/relay.png" alt="Signal bands dissolving into wire fans and branches"><span>06<span>Relay</span>↗</span></button>
+    </div>
+  </section>
+</div>
 </main>
-<dialog id="notes"><div class="dialog-header"><span class="eyebrow">BEFORE THE FIRST PLOT</span><button id="closeNotes" aria-label="Close notes">×</button></div><h2>From screen to paper.</h2><p>The SVG has physical dimensions in millimetres and contains stroked paths grouped by pen. It has no embedded raster, filled areas, live text, or paper background.</p><ol><li>Open the SVG in your plotter software or Inkscape. Confirm page dimensions and your iDraw’s usable drawing area.</li><li>Plot one pen layer at a time. Use “Export pens separately” for one full-page SVG per colour.</li><li>Start with a small proof. Nominal spacing is not a minimum clearance guarantee: displaced lines and crosshatching can overlap.</li><li>The displayed pen width previews your nib; the physical mark depends on your pen. Sorting preserves geometry, but downstream software may reorder paths.</li></ol><p>Time estimates use line length, travel length, and a lift delay. Acceleration, homing, pen changes, and controller overhead are excluded. Export reports the sorted estimate when sorting is enabled.</p><p>Save a recipe to recreate a drawing. Image recipes include a reduced copy of the source image; original high-resolution uploads are not sent to a server.</p><p class="hint">Generator source: <a href="source.zip" download>download the complete source</a>. <a href="README.md">Technical notes</a>.</p></dialog>
+
+<dialog id="notes">
+  <div class="dialog-header"><span class="eyebrow">BEFORE THE FIRST PLOT</span><button id="closeNotes" aria-label="Close notes">×</button></div>
+  <h2>From screen to paper.</h2>
+  <p>The SVG has physical dimensions in millimetres and contains stroked paths grouped by pen. It has no embedded raster, filled areas, live text, or paper background.</p>
+  <ol>
+    <li>Open the SVG in your plotter software or Inkscape. Confirm page dimensions and your iDraw’s usable drawing area.</li>
+    <li>Plot one pen layer at a time. Use “Export pens separately” for one full-page SVG per colour. In a blend, give a motif its own pen to plot it as a separate pass.</li>
+    <li>Start with a small proof. Nominal spacing is not a minimum clearance guarantee: displaced lines, overlays, growth strands and secondary lines can overlap.</li>
+    <li>The displayed pen width previews your nib; the physical mark depends on your pen. Sorting preserves geometry, but downstream software may reorder paths.</li>
+  </ol>
+  <p>Time estimates use line length, travel length, and a lift delay. Acceleration, homing, pen changes, and controller overhead are excluded.</p>
+  <p>Save a recipe to recreate a drawing. Recipes from version 0.1 load as a single motif.</p>
+  <p class="hint"><a href="README.md">Technical notes</a>.</p>
+</dialog>
 <div id="toast" role="status" aria-live="polite" hidden></div>
 <script type="module" src="app.mjs"></script>
-</body></html>
+</body>
+</html>
