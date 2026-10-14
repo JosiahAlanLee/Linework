@@ -3,5 +3,11 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node tests/engine.test.mjs" }
+  "scripts": {
+    "start": "node serve.mjs",
+    "test": "node tests/engine.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
 }
