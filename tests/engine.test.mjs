@@ -174,6 +174,86 @@ assert.deepEqual(normalized.colors, ["#383c37", "#8c4f3c", "#798276"]);
 assert.equal(normalized.motifs.growth.pen, "all");
 assert.ok(toSVG(generate(normalized)).includes("&lt;script&gt;&amp;&quot;"));
 
+// Diagrams in the grimoire's sketching marks.
+{
+  const { EXAMPLE, parseDiagram } = await import("../dist/diagram.mjs");
+  assert.equal(parseDiagram(EXAMPLE).errors.length, 0, "The worked example parses cleanly");
+  const bad = parseDiagram(
+    [
+      'standing a "A"',
+      "wizard w",
+      "standing a",
+      "a -> nobody",
+      'boundary b "B" : a ghost',
+      "a ->",
+      'meaning gate "a sign-off"',
+      "ground",
+      "ground",
+    ].join("\n"),
+  );
+  assert.deepEqual(
+    bad.errors.map((e) => e.line),
+    [2, 3, 4, 5, 6, 9],
+    "Errors are reported against their lines: " + JSON.stringify(bad.errors),
+  );
+  assert.equal(bad.meanings.gate, "a sign-off");
+
+  const off = Object.fromEntries(MOTIF_NAMES.map((k) => [k, { role: "off" }]));
+  const only = { seed: "DG", palette: "earth", motifs: off, diagram: { text: EXAMPLE } },
+    a = generate(only);
+  assert.equal(a.options.mode, "diagram");
+  assert.deepEqual(a, generate(only), "Diagram geometry is deterministic");
+  assert.ok(withinBounds(a) > 300);
+  assert.ok(a.layers[1].paths.length > 0, "Red marks go to pen 2");
+  assert.equal(a.layers[2].paths.length, 0, "Nothing else is drawn");
+  assert.ok(!/<(rect|circle|polygon|text)\b/.test(toSVG(a)), "Dots and fills are drawn as strokes");
+  // The key states every mark used, and only those.
+  const key = a.diagram.stats.key;
+  assert.equal(key.length, 9);
+  assert.ok(key.includes("Gate: a required gate"));
+  assert.ok(key.includes("Break: a cut"));
+  assert.ok(!key.some((k) => k.startsWith("Regulation")));
+  const restated = generate({ ...only, diagram: { text: EXAMPLE + '\nmeaning gate "a sign-off"' } });
+  assert.ok(restated.diagram.stats.key.includes("Gate: a sign-off"));
+  // A different seed changes ornament, not layout or meaning.
+  assert.notDeepEqual(generate({ ...only, seed: "DG2" }).layers, a.layers);
+  assert.deepEqual(generate({ ...only, seed: "DG2" }).diagram.stats, a.diagram.stats);
+
+  // Motifs keep clear of the diagram.
+  const clearance = 8,
+    withRibbons = generate({
+      ...only,
+      motifs: { ...off, ribbons: { role: "region", pen: "3" } },
+      diagram: { text: EXAMPLE, clearance },
+    }),
+    marks = [...a.layers[0].paths, ...a.layers[1].paths].flatMap((p) => p),
+    cell = 2,
+    grid = new Map();
+  for (const [x, y] of marks) {
+    const k = Math.floor(x / cell) + "," + Math.floor(y / cell);
+    if (!grid.has(k)) grid.set(k, []);
+    grid.get(k).push([x, y]);
+  }
+  const nearest = ([x, y]) => {
+    let d = Infinity;
+    for (let i = -2; i <= 2; i++)
+      for (let j = -2; j <= 2; j++)
+        for (const q of grid.get(Math.floor(x / cell) + i + "," + (Math.floor(y / cell) + j)) || [])
+          d = Math.min(d, Math.hypot(q[0] - x, q[1] - y));
+    return d;
+  };
+  const motif = withRibbons.layers[2].paths.flat();
+  assert.ok(motif.length > 1000, "Ribbons still fill the rest of the page");
+  assert.ok(
+    motif.every((p) => nearest(p) > 3),
+    "Motif lines stay out of the clear space",
+  );
+
+  // Comments alone are not a diagram; with no diagram something must still be drawn.
+  assert.equal(normalize({ motifs: off, diagram: { text: "# just a note" } }).mode, "ribbons");
+  assert.equal(generate({ diagram: { text: "" } }).diagram, null);
+}
+
 const route = routePaths([
   [
     [0, 0],
@@ -194,5 +274,5 @@ assert.deepEqual(route[1], [
   [3, 0],
 ]);
 console.log(
-  "All geometry, clipping, determinism, blending, stability, routing, and SVG export checks passed.",
+  "All geometry, clipping, determinism, blending, stability, diagram, routing, and SVG export checks passed.",
 );

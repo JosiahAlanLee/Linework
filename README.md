@@ -1,8 +1,8 @@
 # Linework — Pen Plot Studio
 
-Generates reproducible, layered SVG line drawings for pen plotters. It has four motifs: flow ribbons, signal bands, wire structures and branching growth. They can be blended through soft regions and overlays.
+Generates reproducible, layered SVG line drawings for pen plotters. It has four motifs: flow ribbons, signal bands, wire structures and branching growth. They can be blended through soft regions and overlays. Diagrams in the sketching marks of the Clavicula Matricis can be laid over them, each with a key stating what its marks mean.
 
-![Presets](dist/previews/erosion.png)
+![Outage, delayed](dist/previews/outage.png)
 
 ## Run it
 

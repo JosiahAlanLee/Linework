@@ -25,12 +25,18 @@ createServer(async (req, res) => {
     let path = decodeURIComponent(new URL(req.url, "http://localhost").pathname);
     if (path.endsWith("/")) path += "index.html";
     const file = normalize(join(root, path));
-    if (!file.startsWith(root.endsWith(sep) ? root : root + sep)) throw Object.assign(new Error(), { code: "ENOENT" });
+    if (!file.startsWith(root.endsWith(sep) ? root : root + sep))
+      throw Object.assign(new Error(), { code: "ENOENT" });
     const body = await readFile(file);
-    res.writeHead(200, { "Content-Type": types[extname(file)] || "application/octet-stream", "Cache-Control": "no-cache" });
+    res.writeHead(200, {
+      "Content-Type": types[extname(file)] || "application/octet-stream",
+      "Cache-Control": "no-cache",
+    });
     res.end(body);
   } catch (e) {
     res.writeHead(e.code === "ENOENT" || e.code === "EISDIR" ? 404 : 500, { "Content-Type": "text/plain" });
     res.end(e.code === "ENOENT" || e.code === "EISDIR" ? "Not found" : "Server error");
   }
-}).listen(port, "127.0.0.1", () => console.log(`Linework is running at http://localhost:${port}/  (Ctrl+C to stop)`));
+}).listen(port, "127.0.0.1", () =>
+  console.log(`Linework is running at http://localhost:${port}/  (Ctrl+C to stop)`),
+);

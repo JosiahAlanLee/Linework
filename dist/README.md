@@ -1,6 +1,6 @@
 # Linework — Pen Plot Studio
 
-Version 0.2. A dependency-free SVG generator and browser interface for pen plots.
+Version 0.3. A dependency-free SVG generator and browser interface for pen plots.
 
 ## Output contract
 
@@ -14,6 +14,31 @@ All path centre lines are clipped to the selected page margin plus half the decl
 - **Signal bands:** broken vertical registers within irregular coloured blocks.
 - **Wire structures:** connected angular fans across a sequence of stations.
 - **Branching growth:** space colonisation (Runions et al., 2005). Scattered attractor points pull branch tips toward them and are consumed on arrival. Displacement clumps the attractors and bends the branches; density sets how many attractors there are and how thick trunks can get. Thickness follows the number of tips a branch feeds and is drawn as parallel strands one line-spacing apart, because a plotter cannot vary line width. Pens follow branch order: trunk, branches, then twigs. Secondary lines add fine hairs at the tips. On a full page, one or two roots start from an edge chosen by the seed.
+
+## Diagrams
+
+The grimoire's sketching marks (Clavicula Matricis, from the Systems_Practice_Grimoire repository) can be laid out as a diagram over the motifs. The marks are ported from `generator/marks.py` in `sigils.mjs`, and the monoline capitals from `plotter/build.py`. A diagram is written as text, one mark or route per line:
+
+```
+standing   customers  "customers"
+gate       approval   "dispatch approval"
+authority  execs      "executives, in conflict"
+boundary   provider   "the provider" : approval execs
+ground     "the fibre plant"
+customers -> approval
+execs -> approval
+approval ~> execs "delay attributed"
+```
+
+- **Marks:** standing, candidate, authority, gate, bottleneck, regulation, revision, reflexive, invariant, boundary and mark. A `boundary` with a member list after a colon is drawn as a dashed hull around those members. `ground` runs beneath the whole diagram.
+- **Routes:** `->` route, `+>` additive change (new branch, old kept), `/>` substitutive change (old route struck out), `~>` pointer (unverified attribution), `-x-` route with a break. Chains such as `a -> b -> c` are allowed, and a quoted label at the end of a line labels its last route.
+- **Meanings:** `meaning <mark> "text"` restates a mark's meaning for this diagram.
+- **Key:** Revision 5 (§13) allows the Revision 3 marks "provided each mark's meaning is stated every time it is used." The key lists every mark the diagram uses, with the Tabula XIII wording unless restated, and closes with the practice's rule for sketches.
+- **Layout:** marks are ranked along their routes, in rows or columns, whichever gives larger marks. A loop is broken at the first mark declared. Routes run direct when the way is clear; otherwise they go along a lane above or below, or beside, the marks in between. The seed varies only ornament and the hand's tremor (scaled by Displacement), never placement.
+- **Ornament:** at 0% only the marks' cores are drawn. Above 12% each mark has its seeded ornament. From 85% each mark also gets the seal ring of Tabula XIII.
+- **Plotting:** dots are filled with a spiral and filled shapes with hatching, at 85% of the pen width. Core strokes are drawn twice, half a pen apart, to read heavier. Ink goes to pen 1 and red to pen 2 (pen 1 with a one-pen palette).
+- **Clear space:** other motifs keep this many millimetres from every diagram stroke, label, the ground and the key, with a ragged edge. Growth grows around the diagram rather than being cut by it.
+- **Errors:** the interface lists notation problems by line. Lines with problems are skipped; the rest of the diagram is still drawn.
 
 ## Blending
 
@@ -59,6 +84,12 @@ Motifs left out of `motifs` are off. The version 0.1 form `{mode: 'wire'}` still
 Run `npm test` (or `node tests/engine.test.mjs`) from the project root. Serve `dist/` from any static web server for the UI; ES modules and workers require HTTP rather than `file://`.
 
 No telemetry, external libraries, remote processing, or machine commands are included. Settings are remembered in browser local storage.
+
+## Changes from 0.2
+
+- Added diagrams in the grimoire's sketching marks: text notation, automatic layout, a key stating every mark's meaning, plotter-safe fills, and clear space that the motifs keep around the diagram.
+- Recipes are version 3. Earlier recipes still load.
+- New preset: Outage, delayed (Revision 5, worked example A).
 
 ## Changes from 0.1
 

@@ -7,6 +7,9 @@
  * is drawn unmasked, which reproduces the old single-mode behaviour.
  */
 
+import { random, seedInt } from "./random.mjs";
+import { buildDiagram } from "./diagram.mjs";
+
 export const MOTIF_NAMES = ["ribbons", "signal", "wire", "growth"];
 export const ROLES = ["off", "region", "overlay"];
 const MAX_PATHS = 45000;
@@ -38,6 +41,7 @@ export const DEFAULTS = {
   },
   blendScale: 140, // mm — typical size of a region
   feather: 60, // % — width of transitions between motifs
+  diagram: { text: "", ornament: 70, clearance: 5, key: true, labels: true },
 };
 
 export const PALETTES = {
@@ -50,21 +54,7 @@ export const PALETTES = {
 // ---------------------------------------------------------------------------
 // Randomness and noise
 
-function seedInt(seed) {
-  let h = 2166136261;
-  for (const c of String(seed)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  return h >>> 0;
-}
-
-export function random(seed) {
-  let h = seedInt(seed);
-  return () => {
-    h += 0x6d2b79f5;
-    let t = Math.imul(h ^ (h >>> 15), 1 | h);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+export { random };
 
 function gradient(ix, iy, s) {
   let h = Math.imul(ix, 0x27d4eb2d) ^ Math.imul(iy, 0x165667b1) ^ s;
@@ -121,7 +111,7 @@ const HEX = /^#[0-9a-f]{6}$/i;
 export function normalize(input = {}) {
   const o = { ...DEFAULTS };
   for (const key of Object.keys(DEFAULTS))
-    if (input[key] !== undefined && key !== "motifs") o[key] = input[key];
+    if (input[key] !== undefined && key !== "motifs" && key !== "diagram") o[key] = input[key];
   if (input.paper) o.paper = String(input.paper);
   if (input.orientation) o.orientation = String(input.orientation);
   const n = (key, lo, hi) => {
@@ -154,10 +144,27 @@ export function normalize(input = {}) {
       pen: ["all", "1", "2", "3", "4"].includes(String(m.pen)) ? String(m.pen) : "all",
     };
   }
-  if (!MOTIF_NAMES.some((k) => motifs[k].role !== "off")) motifs.ribbons.role = "region";
+  // Diagram in the grimoire's sketching marks (see diagram.mjs).
+  const dg = input.diagram && typeof input.diagram === "object" ? input.diagram : {},
+    dn = (v, lo, hi, fallback) =>
+      Number.isFinite(Number(v)) ? Math.max(lo, Math.min(hi, Number(v))) : fallback;
+  o.diagram = {
+    text: typeof dg.text === "string" ? dg.text.slice(0, 20000) : "",
+    ornament: dn(dg.ornament, 0, 100, DEFAULTS.diagram.ornament),
+    clearance: dn(dg.clearance, 0, 30, DEFAULTS.diagram.clearance),
+    key: dg.key === undefined ? true : !!dg.key,
+    labels: dg.labels === undefined ? true : !!dg.labels,
+  };
+  const hasDiagram = hasDiagramText(o.diagram.text);
+  // Without a diagram, something must be drawn.
+  if (!hasDiagram && !MOTIF_NAMES.some((k) => motifs[k].role !== "off")) motifs.ribbons.role = "region";
   o.motifs = motifs;
   const active = MOTIF_NAMES.filter((k) => motifs[k].role !== "off");
-  o.mode = active.length === 1 && motifs[active[0]].role === "region" ? active[0] : "blend";
+  o.mode = !active.length
+    ? "diagram"
+    : active.length === 1 && motifs[active[0]].role === "region"
+      ? active[0]
+      : "blend";
 
   o.seed = String(o.seed).slice(0, 80);
   o.colors =
@@ -167,6 +174,13 @@ export function normalize(input = {}) {
   for (const key of ["crosshatch", "frame", "optimize"]) o[key] = !!o[key];
   if (!HEX.test(o.background)) o.background = DEFAULTS.background;
   return o;
+}
+
+/** True when the diagram text has anything besides comments and blank lines. */
+export function hasDiagramText(text) {
+  return String(text || "")
+    .split(/\r?\n/)
+    .some((line) => line.replace(/#.*$/, "").trim());
 }
 
 // ---------------------------------------------------------------------------
@@ -514,7 +528,7 @@ function wire(c) {
  * parallel strands — a plotter cannot vary line width.
  */
 function growth(c) {
-  const { o, m, w, h, s, d, den, inks, region, box } = c,
+  const { o, m, w, h, s, d, den, inks, region, box, fullPage } = c,
     rng = random(`${o.seed}:growth`),
     step = 1.6,
     kill = step * 1.8,
@@ -578,10 +592,10 @@ function growth(c) {
   };
 
   // Roots: along the lower edge for a full page; spread through the region otherwise.
-  const rootCount = region
+  const rootCount = !fullPage
     ? Math.max(1, Math.min(6, Math.round(ax.length / 220)))
     : 1 + Math.floor(rng() * 2);
-  if (!region) {
+  if (fullPage) {
     // One or two roots on an edge chosen by the seed (mostly the bottom).
     const side = rng(),
       edges = [
@@ -591,12 +605,18 @@ function growth(c) {
         (t) => [m + w * t, box[1]],
       ],
       edge = edges[side < 0.55 ? 0 : side < 0.75 ? 1 : side < 0.95 ? 2 : 3];
-    for (let i = 0; i < rootCount; i++) addNode(...edge((i + 0.15 + rng() * 0.7) / rootCount), -1);
-  } else {
+    for (let i = 0; i < rootCount; i++) {
+      const p = edge((i + 0.15 + rng() * 0.7) / rootCount);
+      // An edge may be reserved (a diagram's key or ground); start inside instead.
+      if (!region || region.score(...p) > 0) addNode(...p, -1);
+    }
+  }
+  if (!nx.length) {
     let pick = Math.floor(rng() * ax.length);
-    const chosen = [pick];
+    const chosen = [pick],
+      want = Math.max(rootCount, Math.min(6, Math.round(ax.length / 220)));
     const far = new Float64Array(ax.length).fill(Infinity);
-    for (let r = 1; r < rootCount; r++) {
+    for (let r = 1; r < want; r++) {
       let best = -1;
       for (let i = 0; i < ax.length; i++) {
         far[i] = Math.min(far[i], Math.hypot(ax[i] - ax[pick], ay[i] - ay[pick]));
@@ -794,11 +814,24 @@ export function generate(input = {}) {
     flush();
   };
 
+  // The diagram is laid out first; motifs then keep clear of it.
+  const diagram = hasDiagramText(o.diagram.text) ? buildDiagram(o, box) : null,
+    clear = diagram?.clearance || null,
+    combine = (a, b) =>
+      !a
+        ? b
+        : !b
+          ? a
+          : {
+              score: (x, y) => Math.min(a.score(x, y), b.score(x, y)),
+              keep: (x, y, j) => a.keep(x, y, j) && b.keep(x, y, j),
+            };
   const blend = buildBlend(o, box);
   for (const name of blend.active) {
-    const region = blend.regionFor(name),
+    const own = blend.regionFor(name),
+      region = combine(own, clear),
       setting = o.motifs[name];
-    let items = GENERATORS[name]({ ...base, region });
+    let items = GENERATORS[name]({ ...base, region, fullPage: !own });
     // Growth respects its region while growing; the others are masked afterwards.
     if (region && name !== "growth") items = maskPaths(items, region, random(`${o.seed}:mask:${name}`));
     const fixed = setting.pen === "all" ? null : Number(setting.pen) - 1;
@@ -815,7 +848,18 @@ export function generate(input = {}) {
       ],
       0,
     );
-  return { options: o, layers, bounds: box, limited: pathCount >= MAX_PATHS };
+  if (diagram) {
+    // Ink to the first pen, red to the second when there is one.
+    const red = layers.length > 1 ? 1 : 0;
+    for (const s of diagram.strokes) add(s.pts, s.color === "red" ? red : 0);
+  }
+  return {
+    options: o,
+    layers,
+    bounds: box,
+    limited: pathCount >= MAX_PATHS,
+    diagram: diagram ? { errors: diagram.errors, stats: diagram.stats } : null,
+  };
 }
 
 /** Local nearest-end routing, indexed by spatial cells, with reversible paths. */
@@ -937,7 +981,7 @@ export function toSVG(plot, { selected = null, preview = false } = {}) {
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="${o.width}mm" height="${o.height}mm" viewBox="0 0 ${o.width} ${o.height}">`,
     `<title>Linework / ${esc(o.mode)} / ${esc(o.seed)}</title>`,
-    `<metadata>${esc(JSON.stringify({ generator: "Linework 0.2", ...o }))}</metadata>`,
+    `<metadata>${esc(JSON.stringify({ generator: "Linework 0.3", ...o }))}</metadata>`,
   ];
   if (preview) parts.push(`<rect width="${o.width}" height="${o.height}" fill="${o.background}"/>`);
   for (const l of plot.layers) {

@@ -11,7 +11,7 @@
 </head>
 <body>
 <header>
-  <a class="wordmark" href="./" aria-label="Linework home"><span class="mark">≋</span> LINEWORK<span class="edition">PEN PLOT STUDIO / 02</span></a>
+  <a class="wordmark" href="./" aria-label="Linework home"><span class="mark">≋</span> LINEWORK<span class="edition">PEN PLOT STUDIO / 03</span></a>
   <div class="header-actions"><button id="help" class="quiet">Plotting notes</button><button id="export" class="primary">Export SVG <span>↗</span></button></div>
 </header>
 <main>
@@ -32,6 +32,22 @@
     <label class="range-label" for="feather"><span>Transition</span><output id="featherOut">60%</output></label>
     <input id="feather" type="range" min="0" max="100" value="60">
     <p class="hint">Regions share the page, and their amounts set each one's share. Overlays draw across the regions over their own share of the page. A wider transition lets one motif thin out as the next fills in.</p>
+  </section>
+
+  <section id="diagramSection">
+    <div class="section-label"><span>DIAGRAM</span><span class="tiny">SKETCHING MARKS</span></div>
+    <textarea id="diagramText" rows="9" wrap="off" spellcheck="false" aria-label="Diagram notation" placeholder="standing a &quot;someone&quot;&#10;gate g &quot;a sign-off&quot;&#10;a -> g"></textarea>
+    <div class="row"><button id="diagramExample" class="small-button">Insert worked example</button><button id="diagramClear" class="quiet">Clear</button></div>
+    <ul id="diagramErrors" class="diagram-errors" hidden></ul>
+    <details id="diagramHelp"><summary>Notation</summary><pre id="diagramNotation"></pre></details>
+    <div id="diagramControls">
+      <label class="range-label" for="diagramOrnament"><span>Ornament</span><output id="diagramOrnamentOut">70%</output></label>
+      <input id="diagramOrnament" type="range" min="0" max="100" value="70">
+      <label class="range-label" for="diagramClearance"><span>Clear space</span><output id="diagramClearanceOut">5 mm</output></label>
+      <input id="diagramClearance" type="range" min="0" max="30" value="5">
+      <div class="row checks"><label class="check"><input id="diagramKey" type="checkbox" checked>Key</label><label class="check"><input id="diagramLabels" type="checkbox" checked>Labels</label></div>
+    </div>
+    <p class="hint">Layout is automatic; the seed varies ornament and the hand. Each mark used is listed in the key with its meaning (Revision 5, §13). Ink goes to pen 1, red to pen 2. Motifs keep the clear space around the diagram. Above 85% ornament each mark gets a seal ring.</p>
   </section>
 
   <section>
@@ -81,7 +97,7 @@
     </details>
     <div class="row"><button id="saveConfig" class="small-button">Save recipe</button><label class="small-button load-label" for="loadConfig">Load recipe<input id="loadConfig" type="file" accept="application/json,.json"></label><button id="reset" class="quiet">Reset</button></div>
   </section>
-  <footer class="sidebar-footer">LINEWORK / V0.2<br>Local generation. Every mark is a path.</footer>
+  <footer class="sidebar-footer">LINEWORK / V0.3<br>Local generation. Every mark is a path.</footer>
 </aside>
 
 <div class="workspace">
@@ -97,7 +113,7 @@
     <div><span id="timeLabel">ESTIMATED / SORTED</span><strong id="timeEstimate">—</strong></div>
   </div>
   <section class="preset-section">
-    <div class="preset-heading"><span class="eyebrow">START FROM A STUDY</span><span class="hint">Single motifs and blends</span></div>
+    <div class="preset-heading"><span class="eyebrow">START FROM A STUDY</span><span class="hint">Single motifs, blends and a diagram</span></div>
     <div class="presets">
       <button data-preset="mineral"><img src="previews/ribbons.png" alt="Undulating mineral-coloured line bands"><span>01<span>Mineral ribbons</span>↗</span></button>
       <button data-preset="signal"><img src="previews/signal.png" alt="Layered red and black signal columns"><span>02<span>Interrupted signal</span>↗</span></button>
@@ -105,6 +121,7 @@
       <button data-preset="growth"><img src="previews/growth.png" alt="Branching tree-like growth drawn in bundled strands"><span>04<span>Root system</span>↗</span></button>
       <button data-preset="erosion"><img src="previews/erosion.png" alt="Ribbons thinning into branching growth with signal bars across them"><span>05<span>Erosion</span>↗</span></button>
       <button data-preset="relay"><img src="previews/relay.png" alt="Signal bands dissolving into wire fans and branches"><span>06<span>Relay</span>↗</span></button>
+      <button data-preset="outage"><img src="previews/outage.png" alt="A diagram of sketching marks with branching growth around it"><span>07<span>Outage, delayed</span>↗</span></button>
     </div>
   </section>
 </div>
@@ -116,7 +133,7 @@
   <p>The SVG has physical dimensions in millimetres and contains stroked paths grouped by pen. It has no embedded raster, filled areas, live text, or paper background.</p>
   <ol>
     <li>Open the SVG in your plotter software or Inkscape. Confirm page dimensions and your iDraw’s usable drawing area.</li>
-    <li>Plot one pen layer at a time. Use “Export pens separately” for one full-page SVG per colour. In a blend, give a motif its own pen to plot it as a separate pass.</li>
+    <li>Plot one pen layer at a time. Use “Export pens separately” for one full-page SVG per colour. In a blend, give a motif its own pen to plot it as a separate pass. A diagram draws its ink on pen 1 and its red on pen 2.</li>
     <li>Start with a small proof. Nominal spacing is not a minimum clearance guarantee: displaced lines, overlays, growth strands and secondary lines can overlap.</li>
     <li>The displayed pen width previews your nib; the physical mark depends on your pen. Sorting preserves geometry, but downstream software may reorder paths.</li>
   </ol>

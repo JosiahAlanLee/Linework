@@ -1,5 +1,15 @@
 import { zip } from "./archive.mjs";
-import { DEFAULTS, MOTIF_NAMES, normalize, generate, prepare, metrics, toSVG } from "./engine.mjs";
+import {
+  DEFAULTS,
+  MOTIF_NAMES,
+  normalize,
+  generate,
+  prepare,
+  metrics,
+  toSVG,
+  hasDiagramText,
+} from "./engine.mjs";
+import { EXAMPLE, NOTATION } from "./diagram.mjs";
 
 const $ = (id) => document.getElementById(id);
 const MOTIF_INFO = {
@@ -108,6 +118,16 @@ const presets = {
     blendScale: 140,
     feather: 60,
   },
+  outage: {
+    ...mix({ growth: { role: "region", amount: 50 } }),
+    seed: "OD-108",
+    palette: "signal",
+    spacing: 1.15,
+    distortion: 55,
+    density: 55,
+    crosshatch: true,
+    diagram: { text: EXAMPLE, ornament: 70, clearance: 6, key: true, labels: true },
+  },
   relay: {
     ...mix({
       signal: { role: "region", amount: 50 },
@@ -194,9 +214,10 @@ function buildMotifRows() {
       b.addEventListener("click", () => {
         if (
           role === "off" &&
+          !hasDiagramText(state.diagram.text) &&
           MOTIF_NAMES.filter((k) => k !== name && state.motifs[k].role !== "off").length === 0
         ) {
-          toast("Keep at least one motif on.");
+          toast("Keep at least one motif on, or write a diagram.");
           return;
         }
         state.motifs[name].role = role;
@@ -271,8 +292,17 @@ function syncMotifRows() {
 }
 
 function describe() {
+  const base = describeMotifs();
+  if (!hasDiagramText(state.diagram.text)) return base;
+  return state.mode === "diagram"
+    ? "A diagram alone, in the grimoire's sketching marks."
+    : base + " A diagram is drawn over them, with clear space around it.";
+}
+
+function describeMotifs() {
   const m = state.motifs,
     active = MOTIF_NAMES.filter((k) => m[k].role !== "off");
+  if (!active.length) return "";
   if (state.mode !== "blend") {
     const info = MOTIF_INFO[active[0]];
     return info.label + ": " + info.text + ".";
@@ -309,6 +339,12 @@ function sync() {
   $("customPens").hidden = state.palette !== "custom";
   syncMotifRows();
   $("blendSection").hidden = state.mode !== "blend";
+  if ($("diagramText").value !== state.diagram.text) $("diagramText").value = state.diagram.text;
+  $("diagramOrnament").value = state.diagram.ornament;
+  $("diagramClearance").value = state.diagram.clearance;
+  $("diagramKey").checked = state.diagram.key;
+  $("diagramLabels").checked = state.diagram.labels;
+  $("diagramControls").hidden = !hasDiagramText(state.diagram.text);
   $("modeDescription").textContent = describe();
   outputs();
 }
@@ -319,6 +355,8 @@ function outputs() {
   $("densityOut").value = state.density + "%";
   $("blendScaleOut").value = state.blendScale + " mm";
   $("featherOut").value = state.feather + "%";
+  $("diagramOrnamentOut").value = state.diagram.ornament + "%";
+  $("diagramClearanceOut").value = state.diagram.clearance + " mm";
   $("spacingWarning").hidden = !(state.spacing < state.pen * 2);
   $("spacingWarning").textContent =
     "Spacing is less than twice the pen width. Ink may merge; use a small proof.";
@@ -328,6 +366,13 @@ function readControls() {
   for (const key of SETTING_KEYS) state[key] = TEXT_KEYS.includes(key) ? $(key).value : Number($(key).value);
   for (const key of CHECK_KEYS) state[key] = $(key).checked;
   state.colors = [1, 2, 3].map((i) => $("color" + i).value);
+  state.diagram = {
+    text: $("diagramText").value,
+    ornament: Number($("diagramOrnament").value),
+    clearance: Number($("diagramClearance").value),
+    key: $("diagramKey").checked,
+    labels: $("diagramLabels").checked,
+  };
   state = { ...normalize(state), paper: state.paper, orientation: state.orientation };
   outputs();
   save();
@@ -453,15 +498,33 @@ function onGenerated(result) {
   plot = result.plot;
   buildLayers();
   draw();
+  showDiagramErrors(plot.diagram?.errors || []);
+  const mode = plot.options.mode;
   $("status").textContent = plot.limited
     ? "Path limit reached — reduce density"
     : "Ready / " +
-      (plot.options.mode === "blend" ? "blend" : MOTIF_INFO[plot.options.mode].label.toLowerCase());
+      (mode === "blend" || mode === "diagram" ? mode : MOTIF_INFO[mode].label.toLowerCase()) +
+      (plot.diagram && mode !== "diagram" ? " + diagram" : "") +
+      (plot.diagram?.errors.length
+        ? ` · ${plot.diagram.errors.length} diagram ${plot.diagram.errors.length === 1 ? "problem" : "problems"}`
+        : "");
   $("export").disabled = false;
   $("exportPen").disabled = false;
 }
 
-function requestGenerate() {
+function showDiagramErrors(errors) {
+  const list = $("diagramErrors");
+  list.replaceChildren(
+    ...errors.slice(0, 12).map((e) => {
+      const li = document.createElement("li");
+      li.textContent = `Line ${e.line}: ${e.message}`;
+      return li;
+    }),
+  );
+  list.hidden = !errors.length;
+}
+
+function requestGenerate(delay = 150) {
   clearTimeout(timer);
   $("status").textContent = "Drawing…";
   $("export").disabled = true;
@@ -469,7 +532,7 @@ function requestGenerate() {
   timer = setTimeout(() => {
     timer = null;
     runGenerate();
-  }, 150);
+  }, delay);
 }
 
 function runGenerate() {
@@ -540,7 +603,7 @@ function filename() {
   return "linework-" + plot.options.mode + "-" + plot.options.seed.replace(/[^\w-]+/g, "-").slice(0, 50);
 }
 
-const recipe = (options) => ({ version: 2, ...options });
+const recipe = (options) => ({ version: 3, ...options });
 
 function onExport(result, separate) {
   pendingExport = false;
@@ -644,11 +707,15 @@ buildMotifRows();
 
 document.querySelectorAll("[data-preset]").forEach((b) =>
   b.addEventListener("click", () => {
+    const preset = structuredClone(presets[b.dataset.preset]);
+    // Presets leave an existing diagram alone unless they bring their own.
+    if (preset.diagram && hasDiagramText(state.diagram.text) && state.diagram.text !== preset.diagram.text)
+      if (!confirm("Replace your diagram with the worked example?")) delete preset.diagram;
     state = {
       ...state,
       blendScale: DEFAULTS.blendScale,
       feather: DEFAULTS.feather,
-      ...structuredClone(presets[b.dataset.preset]),
+      ...preset,
     };
     visible.clear();
     sync();
@@ -683,6 +750,30 @@ for (const id of [
     }
     requestGenerate();
   });
+
+$("diagramNotation").textContent = NOTATION;
+$("diagramText").addEventListener("input", () => {
+  readControls();
+  $("diagramControls").hidden = !hasDiagramText(state.diagram.text);
+  $("modeDescription").textContent = describe();
+  requestGenerate(450);
+});
+for (const id of ["diagramOrnament", "diagramClearance"])
+  $(id).addEventListener("input", () => (readControls(), requestGenerate()));
+for (const id of ["diagramKey", "diagramLabels"])
+  $(id).addEventListener("change", () => (readControls(), requestGenerate()));
+$("diagramExample").addEventListener("click", () => {
+  if (hasDiagramText($("diagramText").value) && !confirm("Replace your diagram with the worked example?"))
+    return;
+  $("diagramText").value = EXAMPLE;
+  changed();
+});
+$("diagramClear").addEventListener("click", () => {
+  if (hasDiagramText($("diagramText").value) && !confirm("Clear the diagram?")) return;
+  $("diagramText").value = "";
+  if (!MOTIF_NAMES.some((k) => state.motifs[k].role !== "off")) state.motifs.ribbons.role = "region";
+  changed();
+});
 
 for (const id of ["speed", "travelSpeed", "liftDelay"])
   $(id).addEventListener("change", () => {
@@ -746,7 +837,7 @@ $("loadConfig").addEventListener("change", async (e) => {
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error("Recipe is too large.");
     const data = JSON.parse(await file.text());
-    if (![1, 2].includes(data.version) || !(data.mode || data.motifs))
+    if (![1, 2, 3].includes(data.version) || !(data.mode || data.motifs || data.diagram))
       throw new Error("Choose a Linework recipe.");
     const legacyImage = data.version === 1 && data.mode === "image";
     state = {

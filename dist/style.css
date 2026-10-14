@@ -812,3 +812,50 @@ button.busy {
     transition: none !important;
   }
 }
+
+#diagramText {
+  display: block;
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  background: #1b221d;
+  border: 1px solid #455247;
+  border-radius: 4px;
+  color: #e2e8dc;
+  padding: 9px 10px;
+  font:
+    11px/1.55 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  tab-size: 2;
+}
+#diagramText:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.diagram-errors {
+  margin: 10px 0 0;
+  padding: 8px 10px 8px 24px;
+  border: 1px solid #6d5a33;
+  border-radius: 4px;
+  color: #eed491;
+  font-size: 10.5px;
+  line-height: 1.6;
+}
+#diagramHelp pre {
+  white-space: pre-wrap;
+  font:
+    10px/1.6 ui-monospace,
+    Menlo,
+    Consolas,
+    monospace;
+  color: #b9c6b6;
+  margin: 0;
+}
+.presets button[data-preset="outage"] {
+  grid-column: 1 / -1;
+}
+.presets button[data-preset="outage"] img {
+  object-position: center 30%;
+}
